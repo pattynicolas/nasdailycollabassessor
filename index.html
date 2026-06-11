@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Collab Assessor — Nas.com</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/dist/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f6f6f4;
+      --bg-success: #eaf3de;
+      --bg-danger: #fcebeb;
+      --bg-warning: #faeeda;
+      --bg-info: #e6f1fb;
+      --text: #1a1a1a;
+      --text-secondary: #6b6b6b;
+      --text-tertiary: #aaa;
+      --text-success: #3b6d11;
+      --text-danger: #a32d2d;
+      --text-warning: #854f0b;
+      --text-info: #185fa5;
+      --border: rgba(0,0,0,0.12);
+      --border-mid: rgba(0,0,0,0.2);
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1c;
+        --bg-secondary: #252525;
+        --bg-success: #173404;
+        --bg-danger: #501313;
+        --bg-warning: #412402;
+        --bg-info: #042c53;
+        --text: #f0f0f0;
+        --text-secondary: #aaa;
+        --text-tertiary: #666;
+        --text-success: #c0dd97;
+        --text-danger: #f7c1c1;
+        --text-warning: #fac775;
+        --text-info: #b5d4f4;
+        --border: rgba(255,255,255,0.1);
+        --border-mid: rgba(255,255,255,0.2);
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-secondary);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    header p {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .card {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .field-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .drop-zone {
+      border: 0.5px dashed var(--border-mid);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      background: var(--bg-secondary);
+      cursor: pointer;
+      transition: border-color 0.15s;
+      margin-bottom: 1.25rem;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--text-secondary);
+    }
+
+    .drop-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .drop-inner i { font-size: 28px; }
+    .drop-inner span { font-size: 14px; }
+    .drop-inner small { font-size: 12px; color: var(--text-tertiary); }
+
+    .preview-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      width: 100%;
+    }
+
+    .thumb-wrap { position: relative; display: inline-block; }
+
+    .preview-thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: var(--radius);
+      border: 0.5px solid var(--border);
+      display: block;
+    }
+
+    .remove-img {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--bg-danger);
+      color: var(--text-danger);
+      border: none;
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    textarea {
+      width: 100%;
+      font-size: 14px;
+      line-height: 1.6;
+      background: var(--bg-secondary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      color: var(--text);
+      resize: vertical;
+      min-height: 100px;
+      font-family: inherit;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--border-mid);
+    }
+
+    .run-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 15px;
+      font-weight: 500;
+      border: 0.5px solid var(--border-mid);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.1s;
+      margin-top: 1rem;
+    }
+
+    .run-btn:hover { background: var(--bg-secondary); }
+    .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .result-card {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 1.5rem;
+    }
+
+    .result-section {
+      padding: 1rem 1.25rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .result-section:last-child { border-bottom: none; }
+
+    .result-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .result-content {
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    .verdict-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .verdict-yes { background: var(--bg-success); color: var(--text-success); }
+    .verdict-no { background: var(--bg-danger); color: var(--text-danger); }
+    .verdict-maybe { background: var(--bg-warning); color: var(--text-warning); }
+
+    .verdict-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .error-msg {
+      color: var(--text-danger);
+      font-size: 13px;
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-danger);
+      border-radius: var(--radius);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border-mid);
+      border-top-color: var(--text);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    a { color: var(--text-info); }
+
+    #file-input { display: none; }
+
+    .paste-hint {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-align: center;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><i class="ti ti-handshake"></i> Collab Assessor</h1>
+      <p>Paste screenshots or text from an inbound pitch — get an instant assessment for Nuseir.</p>
+    </header>
+
+    <div class="card">
+      <div class="field-label"><i class="ti ti-photo-up"></i> Screenshots</div>
+      <input type="file" id="file-input" accept="image/*" multiple />
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="drop-inner" id="drop-inner">
+          <i class="ti ti-photo-up"></i>
+          <span>Click or drag screenshots here</span>
+          <small>JPG, PNG, WEBP — multiple files OK</small>
+        </div>
+        <div class="preview-grid" id="preview-grid"></div>
+      </div>
+      <p class="paste-hint">Or press Ctrl+V / Cmd+V anywhere to paste a screenshot</p>
+
+      <div style="margin-top: 1.25rem;">
+        <div class="field-label"><i class="ti ti-clipboard-text"></i> Paste text (optional)</div>
+        <textarea id="pitch-text" placeholder="Email body, DM, brief, deliverables, fee — paste anything..."></textarea>
+      </div>
+
+      <button class="run-btn" id="run-btn" onclick="runAssessment()">
+        <i class="ti ti-sparkles"></i> Assess this collab
+      </button>
+
+      <div id="error-msg" class="error-msg" style="display:none;"></div>
+    </div>
+
+    <div id="result-area" style="display:none;"></div>
+  </div>
+
+  <script>
+    const images = [];
+    const dropZone = document.getElementById('drop-zone');
+    const previewGrid = document.getElementById('preview-grid');
+    const dropInner = document.getElementById('drop-inner');
+    const fileInput = document.getElementById('file-input');
+
+    fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      handleFiles(e.dataTransfer.files);
+    });
+
+    document.addEventListener('paste', e => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      Array.from(items).filter(i => i.type.startsWith('image/')).forEach(item => {
+        const file = item.getAsFile();
+        if (file) processFile(file);
+      });
+    });
+
+    function handleFiles(files) { Array.from(files).forEach(processFile); }
+
+    function processFile(file) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const id = Date.now() + Math.random();
+        images.push({ id, base64: e.target.result.split(',')[1], mediaType: file.type || 'image/png', dataUrl: e.target.result });
+        renderPreviews();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function renderPreviews() {
+      dropInner.style.display = images.length ? 'none' : 'flex';
+      previewGrid.innerHTML = images.map(img => `
+        <div class="thumb-wrap">
+          <img class="preview-thumb" src="${img.dataUrl}" alt="screenshot" />
+          <button class="remove-img" onclick="removeImg('${img.id}')" aria-label="Remove">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>`).join('');
+    }
+
+    function removeImg(id) {
+      const idx = images.findIndex(i => String(i.id) === String(id));
+      if (idx > -1) images.splice(idx, 1);
+      renderPreviews();
+    }
+
+    async function runAssessment() {
+      const pitchText = document.getElementById('pitch-text').value.trim();
+      const btn = document.getElementById('run-btn');
+      const errorEl = document.getElementById('error-msg');
+      const resultArea = document.getElementById('result-area');
+
+      errorEl.style.display = 'none';
+
+      if (!images.length && !pitchText) {
+        errorEl.textContent = 'Add at least one screenshot or paste some text from the pitch.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Researching & assessing...';
+      resultArea.style.display = 'none';
+
+      const systemPrompt = `You are a collaboration assessor for Nuseir Yassin (Nas Daily / Nas.com), a creator with 60M+ followers. You help his EA Patty evaluate inbound collaboration pitches.
+
+Nuseir's brand: storytelling, global optimism, education, entrepreneurship, creator economy. He promotes things that are genuinely useful, globally accessible, and mission-aligned.
+
+RED FLAGS: niche audience mismatch, vague deliverables, no/low compensation for heavy asks, bad brand reputation.
+GREEN FLAGS: global reach, strong credibility, fair compensation, clear deliverables, creator/entrepreneur alignment.
+
+Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
+{
+  "about_brand": "2-3 sentences on who this brand is",
+  "deliverables_summary": "what they are asking Nuseir to do, as plain text with - dashes for bullets",
+  "social_and_web": "any website or social links found or mentioned",
+  "web_search_insights": "what you know or found about this brand reputation, audience size, credibility, recent activity",
+  "verdict": "YES" or "MAYBE" or "NO",
+  "verdict_reason": "1-2 punchy sentences on whether Patty should flag this for Nuseir or pass"
+}`;
+
+      const userContent = [];
+      images.forEach(img => {
+        userContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } });
+      });
+      let userText = 'Assess this collaboration pitch for Nuseir. Use web search to research the brand.';
+      if (pitchText) userText += '\n\nAdditional text:\n' + pitchText;
+      userContent.push({ type: 'text', text: userText });
+
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            system: systemPrompt,
+            tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+            messages: [{ role: 'user', content: userContent }]
+          })
+        });
+
+        const data = await response.json();
+        let jsonText = data.content.filter(b => b.type === 'text').map(b => b.text).join('');
+        jsonText = jsonText.replace(/```json|```/g, '').trim();
+        const result = JSON.parse(jsonText);
+        renderResult(result);
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Check your connection and try again.';
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-sparkles"></i> Assess this collab';
+      }
+    }
+
+    function renderResult(r) {
+      const area = document.getElementById('result-area');
+      const vClass = r.verdict === 'YES' ? 'verdict-yes' : r.verdict === 'NO' ? 'verdict-no' : 'verdict-maybe';
+      const vIcon = r.verdict === 'YES' ? 'ti-circle-check' : r.verdict === 'NO' ? 'ti-circle-x' : 'ti-alert-circle';
+
+      const urlMatch = r.social_and_web && r.social_and_web.match(/https?:\/\/[^\s]+/);
+      const webDisplay = urlMatch
+        ? `<a href="${urlMatch[0]}" target="_blank" rel="noopener">${urlMatch[0]}</a><br><small style="color:var(--text-secondary); font-size:13px;">${r.social_and_web.replace(urlMatch[0], '').trim()}</small>`
+        : `<span style="color:var(--text-secondary); font-size:14px;">${r.social_and_web || 'Not found in pitch'}</span>`;
+
+      area.innerHTML = `
+        <div class="result-card">
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-building"></i> About the brand</div>
+            <p class="result-content">${r.about_brand}</p>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-list-check"></i> Deliverables</div>
+            <p class="result-content">${r.deliverables_summary}</p>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-world"></i> Website / Social</div>
+            <p class="result-content">${webDisplay}</p>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-search"></i> Web research</div>
+            <p class="result-content">${r.web_search_insights}</p>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-flag"></i> Verdict</div>
+            <div class="verdict-row">
+              <span class="verdict-badge ${vClass}"><i class="ti ${vIcon}"></i> ${r.verdict}</span>
+              <p class="result-content" style="flex:1; min-width:180px;">${r.verdict_reason}</p>
+            </div>
+          </div>
+        </div>`;
+      area.style.display = 'block';
+      area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  </script>
+</body>
+</html>
