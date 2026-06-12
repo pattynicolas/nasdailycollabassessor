@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-executive-lark-format-1',
+    version: 'scout-chat-id-helper-1',
     updated: '2026-06-12'
   });
 });
@@ -373,6 +373,37 @@ app.post('/api/lark/message', async (req, res) => {
     return res.status(200).json({ ok: true, message_id: data.data?.message_id, data });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
+  }
+});
+
+app.get('/api/lark/chats', async (_req, res) => {
+  try {
+    const token = await getLarkTenantAccessToken();
+    const response = await fetch('https://open.larksuite.com/open-apis/im/v1/chats?page_size=100', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || data.code) {
+      return res.status(response.ok ? 500 : response.status).json({
+        error: data.msg || data.error?.message || 'Could not list Lark chats.',
+        details: data
+      });
+    }
+
+    const chats = (data.data?.items || []).map(chat => ({
+      name: chat.name || chat.description || '(unnamed chat)',
+      chat_id: chat.chat_id,
+      avatar: chat.avatar,
+      owner_id: chat.owner_id,
+      chat_mode: chat.chat_mode
+    }));
+
+    return res.status(200).json({ ok: true, chats });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not list Lark chats.' });
   }
 });
 
