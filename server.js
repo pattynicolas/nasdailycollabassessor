@@ -134,9 +134,9 @@ app.post('/api/assess', async (req, res) => {
 });
 
 app.post('/api/lark/todo', async (req, res) => {
-  const appId = process.env.COLLAB_ASSESSOR_LARK_APP_ID;
-  const appSecret = process.env.COLLAB_ASSESSOR_LARK_APP_SECRET;
-  const taskListGuid = process.env.COLLAB_ASSESSOR_LARK_TASKLIST_GUID || 'b7545c13-3909-49d6-8cb5-6acf92db994f';
+  const appId = process.env.COLLAB_ASSESSOR_LARK_APP_ID?.trim();
+  const appSecret = process.env.COLLAB_ASSESSOR_LARK_APP_SECRET?.trim();
+  const taskListGuid = process.env.COLLAB_ASSESSOR_LARK_TASKLIST_GUID?.trim() || 'b7545c13-3909-49d6-8cb5-6acf92db994f';
 
   if (!appId || !appSecret) {
     return res.status(500).json({
