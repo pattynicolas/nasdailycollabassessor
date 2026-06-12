@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-short-lark-card-1',
+    version: 'scout-recommendation-label-1',
     updated: '2026-06-12'
   });
 });
@@ -448,7 +448,7 @@ function buildScoutAssessmentCard(assessment, fallbackMessage) {
       }
     },
     elements: [
-      md(`**VERDICT**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
+      md(`**RECOMMENDATION**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
       { tag: 'hr' },
       md(`**SUMMARY**\n${summary}`),
       md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
