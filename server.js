@@ -7,8 +7,20 @@ const port = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
+
+app.use((error, _req, res, next) => {
+  if (error?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Screenshots are too large. Try fewer screenshots or crop them smaller.' });
+  }
+
+  if (error instanceof SyntaxError) {
+    return res.status(400).json({ error: 'Invalid request JSON.' });
+  }
+
+  next(error);
+});
 
 app.post('/api/assess', async (req, res) => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -122,13 +134,13 @@ app.post('/api/assess', async (req, res) => {
 });
 
 app.post('/api/lark/todo', async (req, res) => {
-  const appId = process.env.LARK_APP_ID;
-  const appSecret = process.env.LARK_APP_SECRET;
-  const taskListGuid = process.env.LARK_TASKLIST_GUID || 'b7545c13-3909-49d6-8cb5-6acf92db994f';
+  const appId = process.env.COLLAB_ASSESSOR_LARK_APP_ID;
+  const appSecret = process.env.COLLAB_ASSESSOR_LARK_APP_SECRET;
+  const taskListGuid = process.env.COLLAB_ASSESSOR_LARK_TASKLIST_GUID || 'b7545c13-3909-49d6-8cb5-6acf92db994f';
 
   if (!appId || !appSecret) {
     return res.status(500).json({
-      error: 'Lark is not connected yet. Add LARK_APP_ID and LARK_APP_SECRET in Render environment variables, then redeploy.'
+      error: 'Lark is not connected yet. Add COLLAB_ASSESSOR_LARK_APP_ID and COLLAB_ASSESSOR_LARK_APP_SECRET in Render environment variables, then redeploy.'
     });
   }
 
