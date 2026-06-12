@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-admin-gate-1',
+    version: 'scout-lark-card-title-1',
     updated: '2026-06-12'
   });
 });
@@ -365,8 +365,8 @@ app.post('/api/lark/message', async (req, res) => {
       },
       body: JSON.stringify({
         receive_id: receiveId,
-        msg_type: 'post',
-        content: JSON.stringify(buildLarkPostContent(String(message).trim()))
+        msg_type: 'interactive',
+        content: JSON.stringify(buildLarkCardContent(String(message).trim()))
       })
     });
     const data = await response.json().catch(() => ({}));
@@ -397,6 +397,34 @@ function timingSafeEqual(a, b) {
   const bBuffer = Buffer.from(b);
   if (aBuffer.length !== bBuffer.length) return false;
   return crypto.timingSafeEqual(aBuffer, bBuffer);
+}
+
+function buildLarkCardContent(message) {
+  const lines = message.split(/\r?\n/);
+  const title = lines.shift() || 'Scout Opportunity';
+  const body = lines.join('\n').trim() || 'No details provided.';
+
+  return {
+    config: {
+      wide_screen_mode: true
+    },
+    header: {
+      template: 'blue',
+      title: {
+        tag: 'plain_text',
+        content: title
+      }
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: body
+        }
+      }
+    ]
+  };
 }
 
 function buildLarkPostContent(message) {
