@@ -551,15 +551,25 @@ Final decision philosophy, in order:
 
 Before issuing YES / MAYBE / NO, ask: Will future Nuseir be glad we spent time on this opportunity? Use that as the final calibration check.
 
+Formatting discipline:
+- Always rewrite awkward inbound phrasing into clean professional English.
+- Do not copy phrases like "wants Invitation for Nuseir" or other malformed wording.
+- Do not unnecessarily repeat Nuseir's name inside the same sentence.
+- proposal_name should be a short scan-friendly name, usually the brand/event/show/foundation name.
+- proposal_summary must be 1-2 complete sentences focused on what is being proposed.
+- decision_reason should be 1 complete sentence explaining the final verdict in plain executive language.
+
 Use web search when possible to verify reach, credibility, and recent activity.
 
 Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
 {
   "brand": "brand/person/opportunity name, or Unknown",
+  "proposal_name": "short readable title, usually the brand/event/show/foundation name",
   "opportunity_type": "Collaboration / Content Opportunity OR Speaking Engagement OR Partnership Proposal OR Non-Profit / Cause Initiative OR Media Opportunity OR Other",
   "verdict": "YES" or "MAYBE" or "NO",
   "one_line_take": "one short sentence with the simple reason",
-  "proposal_summary": "one crisp sentence explaining the proposal/ask",
+  "decision_reason": "one complete sentence explaining the verdict",
+  "proposal_summary": "1-2 polished complete sentences explaining the proposal; rewrite awkward grammar",
   "timeline": "dates or timeline if stated, otherwise Not stated",
   "budget": "budget, fee, paid/pro-bono status if stated, otherwise Not stated",
   "social_links": "website/social links if found or stated, otherwise Not stated",
@@ -682,19 +692,42 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
     }
 
     function buildLarkMessage(r) {
-      return `Nuseir - ${r.brand || 'This opportunity'} wants ${r.proposal_summary || r.ask || 'to collaborate'}.
-Type - ${r.opportunity_type || 'Other'}
+      const title = `${formatOpportunityType(r.opportunity_type)}: ${r.proposal_name || r.brand || 'Opportunity'}`;
+      return `${title}
+
+${r.proposal_summary || r.ask || 'No proposal summary available.'}
+
 Timeline - ${r.timeline || 'Not stated'}
 Budget - ${r.budget || 'Not stated'}
-Social Links/Website - ${r.social_links || 'Not stated'}
+Website/Social Links - ${r.social_links || 'Not stated'}
 
-My take: ${r.verdict || 'MAYBE'} - ${r.one_line_take || ''}
+My Take: ${r.verdict || 'MAYBE'}
 
-${r.type_score_label || 'Opportunity Value'}: ${r.type_score || 'MEDIUM'} - ${r.type_score_reason || ''}
-Reach: ${r.reach_score || 'MEDIUM'} - ${r.reach_reason || ''}
-Relevance: ${r.relevance_score || 'MEDIUM'} - ${r.relevance_reason || ''}
-Potential business: ${r.business_score || 'MEDIUM'} - ${r.business_reason || ''}
-Time cost: ${r.time_cost_score || 'MEDIUM'} - ${r.time_cost_reason || ''}`;
+${r.type_score_label || 'Opportunity Value'}: ${r.type_score || 'MEDIUM'}
+Reach: ${r.reach_score || 'MEDIUM'}
+Relevance: ${r.relevance_score || 'MEDIUM'}
+Potential Business: ${r.business_score || 'MEDIUM'}
+Time Cost: ${r.time_cost_score || 'BORDERLINE'}
+
+Reason:
+${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
+    }
+
+    function formatOpportunityType(type) {
+      if (type === 'Collaboration / Content Opportunity') return 'Content Opportunity';
+      if (type === 'Non-Profit / Cause Initiative') return 'Non-Profit Initiative';
+      return type || 'Opportunity';
+    }
+
+    function buildFallbackReason(r) {
+      const parts = [
+        r.type_score_reason,
+        r.reach_reason,
+        r.relevance_reason,
+        r.business_reason,
+        r.time_cost_reason
+      ].filter(Boolean);
+      return parts.length ? parts.join(' ') : 'Scout found limited evidence that this opportunity justifies Nuseir’s time.';
     }
 
     async function copyLarkMessage() {
@@ -750,7 +783,7 @@ Time cost: ${r.time_cost_score || 'MEDIUM'} - ${r.time_cost_reason || ''}`;
     async function addToLarkTodo() {
       const buttons = document.querySelectorAll('.copy-btn');
       const btn = buttons[2];
-      const title = `Decide on ${lastAssessment?.brand || 'opportunity'}`;
+      const title = `Decide on ${lastAssessment?.proposal_name || lastAssessment?.brand || 'opportunity'}`;
       const payload = {
         title,
         details: getCurrentLarkMessage(),

@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-approved-lark-message-1',
+    version: 'scout-executive-lark-format-1',
     updated: '2026-06-12'
   });
 });
@@ -140,6 +140,7 @@ app.post('/api/assess', async (req, res) => {
               additionalProperties: false,
               properties: {
                 brand: { type: 'string' },
+                proposal_name: { type: 'string' },
                 opportunity_type: {
                   type: 'string',
                   enum: [
@@ -153,6 +154,7 @@ app.post('/api/assess', async (req, res) => {
                 },
                 verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
                 one_line_take: { type: 'string' },
+                decision_reason: { type: 'string' },
                 proposal_summary: { type: 'string' },
                 timeline: { type: 'string' },
                 budget: { type: 'string' },
@@ -173,9 +175,11 @@ app.post('/api/assess', async (req, res) => {
               },
               required: [
                 'brand',
+                'proposal_name',
                 'opportunity_type',
                 'verdict',
                 'one_line_take',
+                'decision_reason',
                 'proposal_summary',
                 'timeline',
                 'budget',
