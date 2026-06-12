@@ -22,6 +22,13 @@ app.use((error, _req, res, next) => {
   next(error);
 });
 
+app.get('/api/version', (_req, res) => {
+  res.json({
+    version: 'collab-assessor-lark-tasklist-diagnostics-2',
+    updated: '2026-06-12'
+  });
+});
+
 app.post('/api/assess', async (req, res) => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -167,34 +174,21 @@ app.post('/api/lark/todo', async (req, res) => {
       });
     }
 
-    const createTaskUrl = process.env.LARK_TODO_CREATE_URL || 'https://open.larksuite.com/open-apis/task/v2/tasks';
-    const taskResponse = await fetch(createTaskUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        summary: title,
-        description: `${details}\n\nTask list: ${taskListUrl || `https://applink.larksuite.com/client/todo/task_list?guid=${taskListGuid}`}`,
-        tasklist_guid: taskListGuid,
-        task_list_guid: taskListGuid,
-        tasklists: {
-          tasklist: {
-            tasklist_guid: taskListGuid
-          }
-        }
-      })
+    const description = `${details}\n\nTask list: ${taskListUrl || `https://applink.larksuite.com/client/todo/task_list?guid=${taskListGuid}`}`;
+    const createResult = await createTaskInLarkList(token, {
+      title,
+      description,
+      taskListGuid
     });
 
-    const taskData = await taskResponse.json();
-    if (!taskResponse.ok || taskData.code) {
+    if (!createResult.ok) {
       return res.status(500).json({
-        error: taskData.msg || taskData.error?.message || 'Lark task creation failed.'
+        error: createResult.error || 'Lark task creation failed.',
+        create_attempts: createResult.attempts
       });
     }
 
-    const task = taskData.data?.task || taskData.task || taskData.data || taskData;
+    const task = createResult.task;
     const taskGuid = task.guid;
     const attachedToList = Array.isArray(task.tasklists) && task.tasklists.some(tasklist => (
       tasklist.guid === taskListGuid || tasklist.tasklist_guid === taskListGuid
@@ -222,6 +216,112 @@ app.post('/api/lark/todo', async (req, res) => {
     return res.status(500).json({ error: error.message || 'Could not add to Lark To-Do.' });
   }
 });
+
+async function createTaskInLarkList(token, { title, description, taskListGuid }) {
+  const createTaskUrl = process.env.LARK_TODO_CREATE_URL || 'https://open.larksuite.com/open-apis/task/v2/tasks';
+  const payloads = [
+    {
+      name: 'tasklists-object-tasklist-array-tasklist-guid',
+      body: {
+        summary: title,
+        description,
+        tasklists: {
+          tasklist: [{ tasklist_guid: taskListGuid }]
+        }
+      }
+    },
+    {
+      name: 'tasklists-object-tasklist-array-guid',
+      body: {
+        summary: title,
+        description,
+        tasklists: {
+          tasklist: [{ guid: taskListGuid }]
+        }
+      }
+    },
+    {
+      name: 'tasklists-array-tasklist-guid',
+      body: {
+        summary: title,
+        description,
+        tasklists: [{ tasklist_guid: taskListGuid }]
+      }
+    },
+    {
+      name: 'tasklists-object-tasklist-guid',
+      body: {
+        summary: title,
+        description,
+        tasklists: { tasklist_guid: taskListGuid }
+      }
+    },
+    {
+      name: 'tasklists-array-tasklist-object',
+      body: {
+        summary: title,
+        description,
+        tasklists: [{ tasklist: { tasklist_guid: taskListGuid } }]
+      }
+    },
+    {
+      name: 'tasklists-object-tasklist-object',
+      body: {
+        summary: title,
+        description,
+        tasklists: { tasklist: { tasklist_guid: taskListGuid } }
+      }
+    },
+    {
+      name: 'root-tasklist-guid',
+      body: {
+        summary: title,
+        description,
+        tasklist_guid: taskListGuid,
+        task_list_guid: taskListGuid
+      }
+    }
+  ];
+
+  const attempts = [];
+
+  for (const payload of payloads) {
+    const response = await fetch(createTaskUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload.body)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    const task = data.data?.task || data.task || data.data || data;
+    const attachedToList = Array.isArray(task.tasklists) && task.tasklists.some(tasklist => (
+      tasklist.guid === taskListGuid || tasklist.tasklist_guid === taskListGuid
+    ));
+
+    attempts.push({
+      name: payload.name,
+      status: response.status,
+      code: data.code,
+      msg: data.msg || data.error?.message,
+      task_guid: task.guid,
+      attached_to_list: attachedToList
+    });
+
+    if (response.ok && !data.code && attachedToList) {
+      return { ok: true, task, attempts };
+    }
+
+  }
+
+  return {
+    ok: false,
+    error: attempts.at(-1)?.msg || 'Lark did not accept any task list payload shape.',
+    attempts
+  };
+}
 
 async function tryAttachTaskToList(token, taskListGuid, taskGuid) {
   const attempts = [
