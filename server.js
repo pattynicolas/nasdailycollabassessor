@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-chat-id-helper-1',
+    version: 'scout-bold-lark-title-1',
     updated: '2026-06-12'
   });
 });
@@ -357,8 +357,8 @@ app.post('/api/lark/message', async (req, res) => {
       },
       body: JSON.stringify({
         receive_id: receiveId,
-        msg_type: 'text',
-        content: JSON.stringify({ text: String(message).trim() })
+        msg_type: 'post',
+        content: JSON.stringify(buildLarkPostContent(String(message).trim()))
       })
     });
     const data = await response.json().catch(() => ({}));
@@ -375,6 +375,51 @@ app.post('/api/lark/message', async (req, res) => {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
   }
 });
+
+function buildLarkPostContent(message) {
+  const lines = message.split(/\r?\n/);
+  const title = lines.shift() || 'Scout Opportunity';
+  const content = [[{ tag: 'text', text: title, style: ['bold'] }]];
+
+  for (const line of lines) {
+    if (!line) {
+      content.push([]);
+      continue;
+    }
+
+    content.push(linkifyLarkLine(line));
+  }
+
+  return {
+    post: {
+      en_us: {
+        title: '',
+        content
+      }
+    }
+  };
+}
+
+function linkifyLarkLine(line) {
+  const parts = [];
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlRegex.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ tag: 'text', text: line.slice(lastIndex, match.index) });
+    }
+    parts.push({ tag: 'a', text: match[0], href: match[0] });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < line.length) {
+    parts.push({ tag: 'text', text: line.slice(lastIndex) });
+  }
+
+  return parts.length ? parts : [{ tag: 'text', text: line }];
+}
 
 app.get('/api/lark/chats', async (_req, res) => {
   try {
