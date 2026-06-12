@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-rich-lark-card-1',
+    version: 'scout-short-lark-card-1',
     updated: '2026-06-12'
   });
 });
@@ -454,15 +454,6 @@ function buildScoutAssessmentCard(assessment, fallbackMessage) {
       md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
       { tag: 'hr' },
       md(`**OPPORTUNITY TYPE**\n${formatOpportunityType(assessment.opportunity_type)}`),
-      { tag: 'hr' },
-      md([
-        '**NUSEIR CRITERIA**',
-        criterionLine(assessment.type_score_label || 'Opportunity Value', assessment.type_score, assessment.type_score_reason),
-        criterionLine('Reach', assessment.reach_score, assessment.reach_reason),
-        criterionLine('Relevance', assessment.relevance_score, assessment.relevance_reason),
-        criterionLine('Potential Business', assessment.business_score, assessment.business_reason),
-        criterionLine('Time Cost', assessment.time_cost_score, assessment.time_cost_reason)
-      ].join('\n')),
       { tag: 'hr' },
       md(`**ASK**\n${assessment.ask || 'Not stated'}`),
       md(`**NEXT STEP**\n${assessment.next_step || 'Not stated'}`),
