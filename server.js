@@ -179,7 +179,11 @@ app.post('/api/lark/todo', async (req, res) => {
         description: `${details}\n\nTask list: ${taskListUrl || `https://applink.larksuite.com/client/todo/task_list?guid=${taskListGuid}`}`,
         tasklist_guid: taskListGuid,
         task_list_guid: taskListGuid,
-        tasklists: [{ tasklist: { tasklist_guid: taskListGuid } }]
+        tasklists: {
+          tasklist: {
+            tasklist_guid: taskListGuid
+          }
+        }
       })
     });
 
