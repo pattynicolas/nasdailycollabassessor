@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-opportunity-assessor-1',
+    version: 'scout-user-lark-message-1',
     updated: '2026-06-12'
   });
 });
@@ -326,6 +326,61 @@ app.post('/api/lark/todo', async (req, res) => {
   }
 });
 
+app.post('/api/lark/message', async (req, res) => {
+  const receiveId = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
+    || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
+  const receiveIdType = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE?.trim()
+    || (process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim() ? 'email' : 'open_id');
+
+  if (!receiveId) {
+    return res.status(500).json({
+      error: 'Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL in Render, or add COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE.'
+    });
+  }
+
+  try {
+    const { message } = req.body || {};
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: 'Missing message draft.' });
+    }
+
+    const userSession = getLarkUserSession(req);
+    if (!userSession?.accessToken) {
+      return res.status(401).json({
+        error: 'Please connect Lark first.',
+        needs_lark_login: true,
+        auth_url: '/api/lark/oauth/start'
+      });
+    }
+
+    const token = userSession.accessToken;
+    const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(receiveIdType)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        receive_id: receiveId,
+        msg_type: 'text',
+        content: JSON.stringify({ text: String(message).trim() })
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || data.code) {
+      return res.status(response.ok ? 500 : response.status).json({
+        error: data.msg || data.error?.message || 'Could not send Lark message.',
+        details: data
+      });
+    }
+
+    return res.status(200).json({ ok: true, message_id: data.data?.message_id, data });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
+  }
+});
+
 async function createTaskInLarkList(token, { title, description, taskListGuid }) {
   const createTaskUrl = process.env.LARK_TODO_CREATE_URL || 'https://open.larksuite.com/open-apis/task/v2/tasks';
   const payloads = [
@@ -450,6 +505,31 @@ async function getLarkAppAccessToken() {
   }
 
   return data.app_access_token;
+}
+
+async function getLarkTenantAccessToken() {
+  const appId = process.env.COLLAB_ASSESSOR_LARK_APP_ID?.trim();
+  const appSecret = process.env.COLLAB_ASSESSOR_LARK_APP_SECRET?.trim();
+
+  if (!appId || !appSecret) {
+    throw new Error('Missing COLLAB_ASSESSOR_LARK_APP_ID or COLLAB_ASSESSOR_LARK_APP_SECRET in Render.');
+  }
+
+  const response = await fetch('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      app_id: appId,
+      app_secret: appSecret
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.code || !data.tenant_access_token) {
+    throw new Error(data.msg || data.error || 'Could not get Lark tenant access token.');
+  }
+
+  return data.tenant_access_token;
 }
 
 async function exchangeLarkCodeForUserToken(appAccessToken, code) {

@@ -395,7 +395,10 @@
     const dropInner = document.getElementById('drop-inner');
     const fileInput = document.getElementById('file-input');
 
-    window.addEventListener('load', retryPendingLarkTodo);
+    window.addEventListener('load', () => {
+      retryPendingLarkTodo();
+      retryPendingLarkMessage();
+    });
     fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -655,8 +658,9 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
           <div class="result-section">
             <div class="result-label"><i class="ti ti-message-forward"></i> Lark message</div>
             <button class="copy-btn" onclick="copyLarkMessage()"><i class="ti ti-copy"></i> Copy for Lark</button>
+            <button class="copy-btn" onclick="sendLarkMessage()" style="margin-left:8px;"><i class="ti ti-send"></i> Send to Nuseir</button>
             <button class="copy-btn" onclick="addToLarkTodo()" style="margin-left:8px;"><i class="ti ti-square-check"></i> Add to Nuseir's To-Do</button>
-            <textarea class="lark-box" readonly>${escapeHtml(lastLarkMessage)}</textarea>
+            <textarea class="lark-box" id="lark-message-box">${escapeHtml(lastLarkMessage)}</textarea>
           </div>
         </div>`;
       area.style.display = 'block';
@@ -699,7 +703,7 @@ Time cost: ${r.time_cost_score || 'MEDIUM'} - ${r.time_cost_reason || ''}`;
     async function copyLarkMessage() {
       const btn = document.querySelector('.copy-btn');
       try {
-        await navigator.clipboard.writeText(lastLarkMessage);
+        await navigator.clipboard.writeText(getCurrentLarkMessage());
         btn.innerHTML = '<i class="ti ti-check"></i> Copied';
         setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy"></i> Copy for Lark'; }, 1400);
       } catch {
@@ -708,13 +712,81 @@ Time cost: ${r.time_cost_score || 'MEDIUM'} - ${r.time_cost_reason || ''}`;
       }
     }
 
-    async function addToLarkTodo() {
+    function getCurrentLarkMessage() {
+      return document.getElementById('lark-message-box')?.value || lastLarkMessage;
+    }
+
+    async function sendLarkMessage() {
       const buttons = document.querySelectorAll('.copy-btn');
       const btn = buttons[1];
+      const message = getCurrentLarkMessage().trim();
+
+      if (!message) {
+        alert('No message draft to send.');
+        return;
+      }
+
+      const approved = confirm(`Send this Lark message to Nuseir?\n\n${message.slice(0, 700)}${message.length > 700 ? '\n...' : ''}`);
+      if (!approved) return;
+
+      try {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Sending...';
+
+        const response = await fetch('/api/lark/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        if (response.status === 401 && data.needs_lark_login) {
+          sessionStorage.setItem('pending_lark_message', JSON.stringify({ message }));
+          window.location.href = data.auth_url || '/api/lark/oauth/start';
+          return;
+        }
+        if (!response.ok) throw new Error(data.error || 'Could not send message.');
+
+        btn.innerHTML = '<i class="ti ti-check"></i> Sent';
+        setTimeout(() => { btn.innerHTML = '<i class="ti ti-send"></i> Send to Nuseir'; btn.disabled = false; }, 1600);
+      } catch (err) {
+        btn.innerHTML = '<i class="ti ti-alert-circle"></i> Setup needed';
+        alert(err.message || 'Could not send message.');
+        setTimeout(() => { btn.innerHTML = '<i class="ti ti-send"></i> Send to Nuseir'; btn.disabled = false; }, 1800);
+      }
+    }
+
+    async function retryPendingLarkMessage() {
+      const params = new URLSearchParams(window.location.search);
+      const pending = sessionStorage.getItem('pending_lark_message');
+      if (params.get('lark_connected') !== '1' || !pending) return;
+
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+
+      try {
+        const payload = JSON.parse(pending);
+        const response = await fetch('/api/lark/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not send message.');
+
+        sessionStorage.removeItem('pending_lark_message');
+        alert('Sent to Nuseir on Lark.');
+      } catch (err) {
+        alert(err.message || 'Lark connected, but the message could not be sent.');
+      }
+    }
+
+    async function addToLarkTodo() {
+      const buttons = document.querySelectorAll('.copy-btn');
+      const btn = buttons[2];
       const title = `Decide on ${lastAssessment?.brand || 'opportunity'}`;
       const payload = {
         title,
-        details: lastLarkMessage,
+        details: getCurrentLarkMessage(),
         taskListUrl: 'https://applink.larksuite.com/client/todo/task_list?guid=b7545c13-3909-49d6-8cb5-6acf92db994f'
       };
 
