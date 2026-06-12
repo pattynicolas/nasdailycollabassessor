@@ -63,6 +63,9 @@ app.post('/api/assess', async (req, res) => {
                 verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
                 one_line_take: { type: 'string' },
                 proposal_summary: { type: 'string' },
+                timeline: { type: 'string' },
+                budget: { type: 'string' },
+                social_links: { type: 'string' },
                 reach_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
                 reach_reason: { type: 'string' },
                 relevance_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
@@ -70,14 +73,16 @@ app.post('/api/assess', async (req, res) => {
                 business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
                 business_reason: { type: 'string' },
                 ask: { type: 'string' },
-                next_step: { type: 'string' },
-                lark_message: { type: 'string' }
+                next_step: { type: 'string' }
               },
               required: [
                 'brand',
                 'verdict',
                 'one_line_take',
                 'proposal_summary',
+                'timeline',
+                'budget',
+                'social_links',
                 'reach_score',
                 'reach_reason',
                 'relevance_score',
@@ -85,8 +90,7 @@ app.post('/api/assess', async (req, res) => {
                 'business_score',
                 'business_reason',
                 'ask',
-                'next_step',
-                'lark_message'
+                'next_step'
               ]
             }
           }

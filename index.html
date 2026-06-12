@@ -474,7 +474,10 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
   "brand": "brand/person/opportunity name, or Unknown",
   "verdict": "YES" or "MAYBE" or "NO",
   "one_line_take": "one short sentence with the simple reason",
-  "proposal_summary": "2-3 crisp sentences summarizing the proposal, sender, ask, and why it matters",
+  "proposal_summary": "one crisp sentence explaining the proposal/ask",
+  "timeline": "dates or timeline if stated, otherwise Not stated",
+  "budget": "budget, fee, paid/pro-bono status if stated, otherwise Not stated",
+  "social_links": "website/social links if found or stated, otherwise Not stated",
   "reach_score": "STRONG" or "MEDIUM" or "WEAK",
   "reach_reason": "max 14 words",
   "relevance_score": "STRONG" or "MEDIUM" or "WEAK",
@@ -482,8 +485,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
   "business_score": "STRONG" or "MEDIUM" or "WEAK",
   "business_reason": "max 14 words",
   "ask": "what they want from Nuseir in one short sentence",
-  "next_step": "one simple action Patty should take",
-  "lark_message": "a polished C-level summary Patty can paste directly to Nuseir. Format it as: 'Nuseir - [brand] wants [ask].' then 'My take: [verdict + reason].' then short criteria lines for Reach, Relevance, Business, then 'Suggested reply: [next step]'. Keep it direct, no fluff, no markdown bullets longer than one line."
+  "next_step": "one simple action Patty should take"
 }`;
 
       const userContent = [];
@@ -520,7 +522,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
       const area = document.getElementById('result-area');
       const vClass = r.verdict === 'YES' ? 'verdict-yes' : r.verdict === 'NO' ? 'verdict-no' : 'verdict-maybe';
       const vIcon = r.verdict === 'YES' ? 'ti-circle-check' : r.verdict === 'NO' ? 'ti-circle-x' : 'ti-alert-circle';
-      lastLarkMessage = r.lark_message || buildLarkMessage(r);
+      lastLarkMessage = buildLarkMessage(r);
 
       area.innerHTML = `
         <div class="result-card">
@@ -569,15 +571,16 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
     }
 
     function buildLarkMessage(r) {
-      return `Nuseir - ${r.proposal_summary || `${r.brand || 'This opportunity'} wants: ${r.ask || 'Unknown ask'}`}
+      return `Nuseir - ${r.brand || 'This opportunity'} wants ${r.proposal_summary || r.ask || 'to collaborate'}.
+Timeline - ${r.timeline || 'Not stated'}
+Budget - ${r.budget || 'Not stated'}
+Social Links/Website - ${r.social_links || 'Not stated'}
 
 My take: ${r.verdict || 'MAYBE'} - ${r.one_line_take || ''}
 
 Reach: ${r.reach_score || 'MEDIUM'} - ${r.reach_reason || ''}
 Relevance: ${r.relevance_score || 'MEDIUM'} - ${r.relevance_reason || ''}
-Potential business: ${r.business_score || 'MEDIUM'} - ${r.business_reason || ''}
-
-Suggested reply: ${r.next_step || ''}`;
+Potential business: ${r.business_score || 'MEDIUM'} - ${r.business_reason || ''}`;
     }
 
     async function copyLarkMessage() {
