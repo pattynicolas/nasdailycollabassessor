@@ -177,7 +177,9 @@ app.post('/api/lark/todo', async (req, res) => {
       body: JSON.stringify({
         summary: title,
         description: `${details}\n\nTask list: ${taskListUrl || `https://applink.larksuite.com/client/todo/task_list?guid=${taskListGuid}`}`,
-        tasklist_guid: taskListGuid
+        tasklist_guid: taskListGuid,
+        task_list_guid: taskListGuid,
+        tasklists: [{ guid: taskListGuid }]
       })
     });
 
@@ -188,14 +190,94 @@ app.post('/api/lark/todo', async (req, res) => {
       });
     }
 
-    return res.status(200).json({
-      ok: true,
-      task: taskData.data || taskData
-    });
+    const task = taskData.data?.task || taskData.task || taskData.data || taskData;
+    const taskGuid = task.guid;
+    const attachedToList = Array.isArray(task.tasklists) && task.tasklists.some(tasklist => (
+      tasklist.guid === taskListGuid || tasklist.tasklist_guid === taskListGuid
+    ));
+
+    if (!taskGuid) {
+      return res.status(500).json({ error: 'Lark created the task, but did not return a task GUID.' });
+    }
+
+    if (!attachedToList) {
+      const attachResults = await tryAttachTaskToList(token, taskListGuid, taskGuid);
+      const attached = attachResults.some(result => result.ok);
+
+      if (!attached) {
+        return res.status(500).json({
+          error: 'Task was created, but Lark did not attach it to the requested task list.',
+          task_url: task.url,
+          attach_results: attachResults
+        });
+      }
+    }
+
+    return res.status(200).json({ ok: true, task });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Could not add to Lark To-Do.' });
   }
 });
+
+async function tryAttachTaskToList(token, taskListGuid, taskGuid) {
+  const attempts = [
+    {
+      method: 'POST',
+      url: `https://open.larksuite.com/open-apis/task/v2/tasklists/${taskListGuid}/tasks`,
+      body: { task_guid: taskGuid }
+    },
+    {
+      method: 'POST',
+      url: `https://open.larksuite.com/open-apis/task/v2/tasklists/${taskListGuid}/tasks/${taskGuid}`,
+      body: {}
+    },
+    {
+      method: 'PUT',
+      url: `https://open.larksuite.com/open-apis/task/v2/tasklists/${taskListGuid}/tasks/${taskGuid}`,
+      body: {}
+    },
+    {
+      method: 'POST',
+      url: `https://open.larksuite.com/open-apis/task/v2/tasks/${taskGuid}/tasklists`,
+      body: { tasklist_guid: taskListGuid }
+    }
+  ];
+
+  const results = [];
+
+  for (const attempt of attempts) {
+    try {
+      const response = await fetch(attempt.url, {
+        method: attempt.method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(attempt.body)
+      });
+      const data = await response.json().catch(() => ({}));
+      results.push({
+        ok: response.ok && !data.code,
+        method: attempt.method,
+        url: attempt.url,
+        status: response.status,
+        code: data.code,
+        msg: data.msg || data.error?.message
+      });
+
+      if (response.ok && !data.code) break;
+    } catch (error) {
+      results.push({
+        ok: false,
+        method: attempt.method,
+        url: attempt.url,
+        msg: error.message
+      });
+    }
+  }
+
+  return results;
+}
 
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
