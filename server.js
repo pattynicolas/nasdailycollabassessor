@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-bold-lark-title-1',
+    version: 'scout-bold-lark-title-2',
     updated: '2026-06-12'
   });
 });
@@ -379,11 +379,11 @@ app.post('/api/lark/message', async (req, res) => {
 function buildLarkPostContent(message) {
   const lines = message.split(/\r?\n/);
   const title = lines.shift() || 'Scout Opportunity';
-  const content = [[{ tag: 'text', text: title, style: ['bold'] }]];
+  const content = [];
 
   for (const line of lines) {
     if (!line) {
-      content.push([]);
+      content.push([{ tag: 'text', text: ' ' }]);
       continue;
     }
 
@@ -393,7 +393,7 @@ function buildLarkPostContent(message) {
   return {
     post: {
       en_us: {
-        title: '',
+        title,
         content
       }
     }
