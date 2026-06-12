@@ -782,7 +782,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const response = await fetch('/api/lark/message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': adminKey },
-          body: JSON.stringify({ message })
+          body: JSON.stringify({ message, assessment: lastAssessment })
         });
         const data = await response.json();
         if (response.status === 403) clearScoutAdminKey();

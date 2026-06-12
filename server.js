@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-lark-card-title-1',
+    version: 'scout-rich-lark-card-1',
     updated: '2026-06-12'
   });
 });
@@ -351,7 +351,7 @@ app.post('/api/lark/message', async (req, res) => {
   }
 
   try {
-    const { message } = req.body || {};
+    const { message, assessment } = req.body || {};
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Missing message draft.' });
     }
@@ -366,7 +366,9 @@ app.post('/api/lark/message', async (req, res) => {
       body: JSON.stringify({
         receive_id: receiveId,
         msg_type: 'interactive',
-        content: JSON.stringify(buildLarkCardContent(String(message).trim()))
+        content: JSON.stringify(assessment
+          ? buildScoutAssessmentCard(assessment, String(message).trim())
+          : buildLarkCardContent(String(message).trim()))
       })
     });
     const data = await response.json().catch(() => ({}));
@@ -425,6 +427,81 @@ function buildLarkCardContent(message) {
       }
     ]
   };
+}
+
+function buildScoutAssessmentCard(assessment, fallbackMessage) {
+  const title = `${formatOpportunityType(assessment.opportunity_type)}: ${assessment.proposal_name || assessment.brand || 'Opportunity'}`;
+  const verdict = assessment.verdict || 'MAYBE';
+  const headerTemplate = verdict === 'YES' ? 'green' : verdict === 'NO' ? 'red' : 'orange';
+  const summary = assessment.proposal_summary || getMessageBody(fallbackMessage) || 'No proposal summary available.';
+  const reason = assessment.decision_reason || assessment.one_line_take || 'Scout did not provide a reason.';
+
+  return {
+    config: {
+      wide_screen_mode: true
+    },
+    header: {
+      template: headerTemplate,
+      title: {
+        tag: 'plain_text',
+        content: title
+      }
+    },
+    elements: [
+      md(`**VERDICT**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
+      { tag: 'hr' },
+      md(`**SUMMARY**\n${summary}`),
+      md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
+      { tag: 'hr' },
+      md(`**OPPORTUNITY TYPE**\n${formatOpportunityType(assessment.opportunity_type)}`),
+      { tag: 'hr' },
+      md([
+        '**NUSEIR CRITERIA**',
+        criterionLine(assessment.type_score_label || 'Opportunity Value', assessment.type_score, assessment.type_score_reason),
+        criterionLine('Reach', assessment.reach_score, assessment.reach_reason),
+        criterionLine('Relevance', assessment.relevance_score, assessment.relevance_reason),
+        criterionLine('Potential Business', assessment.business_score, assessment.business_reason),
+        criterionLine('Time Cost', assessment.time_cost_score, assessment.time_cost_reason)
+      ].join('\n')),
+      { tag: 'hr' },
+      md(`**ASK**\n${assessment.ask || 'Not stated'}`),
+      md(`**NEXT STEP**\n${assessment.next_step || 'Not stated'}`),
+      { tag: 'hr' },
+      md(`**REASON**\n${reason}`)
+    ]
+  };
+}
+
+function md(content) {
+  return {
+    tag: 'div',
+    text: {
+      tag: 'lark_md',
+      content
+    }
+  };
+}
+
+function criterionLine(label, score, reason) {
+  return `**${label}:** ${scoreMarker(score)} **${score || 'MEDIUM'}**${reason ? ` — ${reason}` : ''}`;
+}
+
+function scoreMarker(score = '') {
+  if (['YES', 'STRONG', 'HIGH', 'WORTH IT'].includes(score)) return '🟢';
+  if (['NO', 'WEAK', 'LOW', 'NOT WORTH IT'].includes(score)) return '🔴';
+  return '🟡';
+}
+
+function formatOpportunityType(type) {
+  if (type === 'Collaboration / Content Opportunity') return 'Content Opportunity';
+  if (type === 'Non-Profit / Cause Initiative') return 'Non-Profit Initiative';
+  return type || 'Opportunity';
+}
+
+function getMessageBody(message) {
+  const lines = String(message || '').split(/\r?\n/);
+  lines.shift();
+  return lines.join('\n').trim();
 }
 
 function buildLarkPostContent(message) {
