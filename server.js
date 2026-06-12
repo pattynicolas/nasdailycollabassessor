@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'collab-assessor-lark-user-oauth-1',
+    version: 'scout-opportunity-assessor-1',
     updated: '2026-06-12'
   });
 });
@@ -127,48 +127,70 @@ app.post('/api/assess', async (req, res) => {
         model: process.env.OPENAI_MODEL || 'gpt-4.1',
         instructions: system,
         input: [{ role: 'user', content: inputContent }],
-        max_output_tokens: 1200,
+        max_output_tokens: 1600,
         tools: [{ type: 'web_search' }],
         tool_choice: 'auto',
         text: {
           format: {
             type: 'json_schema',
-            name: 'collab_assessment',
+            name: 'opportunity_assessment',
             strict: true,
             schema: {
               type: 'object',
               additionalProperties: false,
               properties: {
                 brand: { type: 'string' },
+                opportunity_type: {
+                  type: 'string',
+                  enum: [
+                    'Collaboration / Content Opportunity',
+                    'Speaking Engagement',
+                    'Partnership Proposal',
+                    'Non-Profit / Cause Initiative',
+                    'Media Opportunity',
+                    'Other'
+                  ]
+                },
                 verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
                 one_line_take: { type: 'string' },
                 proposal_summary: { type: 'string' },
                 timeline: { type: 'string' },
                 budget: { type: 'string' },
                 social_links: { type: 'string' },
+                type_score_label: { type: 'string' },
+                type_score: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+                type_score_reason: { type: 'string' },
                 reach_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
                 reach_reason: { type: 'string' },
                 relevance_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
                 relevance_reason: { type: 'string' },
                 business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
                 business_reason: { type: 'string' },
+                time_cost_score: { type: 'string', enum: ['WORTH IT', 'BORDERLINE', 'NOT WORTH IT'] },
+                time_cost_reason: { type: 'string' },
                 ask: { type: 'string' },
                 next_step: { type: 'string' }
               },
               required: [
                 'brand',
+                'opportunity_type',
                 'verdict',
                 'one_line_take',
                 'proposal_summary',
                 'timeline',
                 'budget',
                 'social_links',
+                'type_score_label',
+                'type_score',
+                'type_score_reason',
                 'reach_score',
                 'reach_reason',
                 'relevance_score',
                 'relevance_reason',
                 'business_score',
                 'business_reason',
+                'time_cost_score',
+                'time_cost_reason',
                 'ask',
                 'next_step'
               ]
@@ -557,5 +579,5 @@ app.get('*', (_req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Collab Assessor running on port ${port}`);
+  console.log(`Scout running on port ${port}`);
 });

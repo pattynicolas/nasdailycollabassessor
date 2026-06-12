@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Collab Assessor — Nas.com</title>
+  <title>Scout — Opportunity Scout for Nas Daily</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/dist/tabler-icons.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -354,8 +354,8 @@
 <body>
   <div class="container">
     <header>
-      <h1><i class="ti ti-handshake"></i> Collab Assessor</h1>
-      <p>Paste screenshots or text from an inbound pitch — get an instant assessment for Nuseir.</p>
+      <h1><i class="ti ti-radar"></i> Scout</h1>
+      <p>The opportunity scout for Nuseir: sharp-eyed, story-hungry, and allergic to wasted time.</p>
     </header>
 
     <div class="card">
@@ -377,7 +377,7 @@
       </div>
 
       <button class="run-btn" id="run-btn" onclick="runAssessment()">
-        <i class="ti ti-sparkles"></i> Assess this collab
+        <i class="ti ti-sparkles"></i> Scout this opportunity
       </button>
 
       <div id="error-msg" class="error-msg" style="display:none;"></div>
@@ -489,30 +489,91 @@
       btn.innerHTML = '<span class="spinner"></span> Researching & assessing...';
       resultArea.style.display = 'none';
 
-      const systemPrompt = `You are Patty's collaboration assessor for Nuseir Yassin (Nas Daily / Nas.com). Keep the output extremely simple, executive-friendly, and easy for Nuseir to digest in under 20 seconds.
+      const systemPrompt = `You are Scout, Patty's opportunity scout for Nuseir Yassin (Nas Daily / Nas.com). Your personality: sharp-eyed, commercially aware, story-hungry, mission-driven, and allergic to wasted executive time. You spot hidden upside, but you do not hype weak opportunities.
 
-Assess every opportunity using Nuseir's three criteria:
-1. Reach: Does this brand/person/opportunity have meaningful audience, distribution, credibility, or amplification?
-2. Relevance: Does it fit Nas Daily content: storytelling, global optimism, education, entrepreneurship, creator economy, useful products, or world-scale ideas?
-3. Potential business: Could this lead to revenue, a strategic relationship, useful access, a repeatable partnership, or material upside?
+Keep the output extremely simple, executive-friendly, and easy for Nuseir to digest in under 20 seconds.
 
-Use web search when possible to verify the brand's reach, credibility, and recent activity.
+First classify the opportunity as exactly one of:
+- Collaboration / Content Opportunity
+- Speaking Engagement
+- Partnership Proposal
+- Non-Profit / Cause Initiative
+- Media Opportunity
+- Other
+
+Then evaluate using universal criteria:
+1. Reach: audience, distribution, credibility, media value, or amplification.
+2. Relevance: fit with Nas Daily content, education, storytelling, entrepreneurship, global optimism, creator economy, useful products, or world-scale ideas.
+3. Potential business: revenue, strategic access, sponsors, repeatability, partnership, or material upside.
+4. Time Cost: whether this justifies Nuseir's personal attention. Attention is often scarcer than money.
+
+Classification-specific calibration:
+
+For Collaboration / Content Opportunity:
+- Do not judge only by business value.
+- Ask: Is there a compelling Nas Daily story here?
+- Consider human story, educational value, surprising insights, global relevance, viral potential, and access to unique people/places/experiences.
+- For pro-bono opportunities, ask: Would Nas Daily want to create content about this even with no commercial benefit?
+- If yes, increase recommendation strength.
+- Set type_score_label to "Story Potential".
+
+For Speaking Engagement:
+- Assume Nuseir's standard speaking fee is $50,000 USD.
+- Evaluate fee offered, audience quality, event prestige, strategic access, future business, sponsorship potential, and content opportunities.
+- If fee is below $50,000, do not automatically reject. Ask whether strategic value compensates for the fee gap.
+- Strategic value can include founders, investors, government leaders, enterprise decision makers, potential sponsors, or significant media exposure.
+- Set type_score_label to "Worth Nuseir's Time".
+
+For Partnership Proposal:
+- Evaluate strategic fit with the Nas Daily ecosystem, long-term potential, distribution value, revenue potential, repeatability, and ability to unlock future opportunities.
+- Set type_score_label to "Partnership Potential".
+
+For Non-Profit / Cause Initiative:
+- Evaluate mission alignment rather than revenue.
+- Ask: Does this advance the broader Nas Daily mission?
+- Consider education, human progress, opportunity creation, entrepreneurship, global understanding, and positive impact.
+- Also evaluate organization credibility, ability to execute, storytelling value, and audience relevance.
+- Set type_score_label to "Mission Impact".
+
+For Media Opportunity:
+- Evaluate audience quality, credibility, reach, narrative control, reputational upside/downside, and whether it advances Nuseir's positioning.
+- Set type_score_label to "Media Value".
+
+For Other:
+- Identify the real opportunity logic and set type_score_label to "Opportunity Value".
+
+Final decision philosophy, in order:
+1. Great stories
+2. Strategic leverage
+3. Mission alignment
+4. Revenue and business opportunities
+5. Efficient use of Nuseir's time
+
+Before issuing YES / MAYBE / NO, ask: Will future Nuseir be glad we spent time on this opportunity? Use that as the final calibration check.
+
+Use web search when possible to verify reach, credibility, and recent activity.
 
 Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
 {
   "brand": "brand/person/opportunity name, or Unknown",
+  "opportunity_type": "Collaboration / Content Opportunity OR Speaking Engagement OR Partnership Proposal OR Non-Profit / Cause Initiative OR Media Opportunity OR Other",
   "verdict": "YES" or "MAYBE" or "NO",
   "one_line_take": "one short sentence with the simple reason",
   "proposal_summary": "one crisp sentence explaining the proposal/ask",
   "timeline": "dates or timeline if stated, otherwise Not stated",
   "budget": "budget, fee, paid/pro-bono status if stated, otherwise Not stated",
   "social_links": "website/social links if found or stated, otherwise Not stated",
+  "type_score_label": "Story Potential OR Worth Nuseir's Time OR Partnership Potential OR Mission Impact OR Media Value OR Opportunity Value",
+  "type_score": "HIGH" or "MEDIUM" or "LOW",
+  "type_score_reason": "max 14 words",
   "reach_score": "STRONG" or "MEDIUM" or "WEAK",
   "reach_reason": "max 14 words",
   "relevance_score": "STRONG" or "MEDIUM" or "WEAK",
   "relevance_reason": "max 14 words",
   "business_score": "STRONG" or "MEDIUM" or "WEAK",
   "business_reason": "max 14 words",
+  "time_cost_score": "WORTH IT" or "BORDERLINE" or "NOT WORTH IT",
+  "time_cost_reason": "max 14 words explaining whether it justifies Nuseir's attention",
   "ask": "what they want from Nuseir in one short sentence",
   "next_step": "one simple action Patty should take"
 }`;
@@ -521,7 +582,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
       images.forEach(img => {
         userContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } });
       });
-      let userText = 'Assess this collaboration pitch for Nuseir using only Reach, Relevance to Nas Daily, and Potential Business.';
+      let userText = 'Scout this opportunity for Nuseir. Classify it first, then evaluate Reach, Relevance, Potential Business, Time Cost, and the type-specific opportunity score.';
       if (pitchText) userText += '\n\nAdditional text:\n' + pitchText;
       userContent.push({ type: 'text', text: userText });
 
@@ -549,7 +610,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
         errorEl.style.display = 'block';
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="ti ti-sparkles"></i> Assess this collab';
+        btn.innerHTML = '<i class="ti ti-sparkles"></i> Scout this opportunity';
       }
     }
 
@@ -570,11 +631,17 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
             </div>
           </div>
           <div class="result-section">
+            <div class="result-label"><i class="ti ti-category"></i> Opportunity type</div>
+            <p class="result-content">${escapeHtml(r.opportunity_type || 'Other')}</p>
+          </div>
+          <div class="result-section">
             <div class="result-label"><i class="ti ti-target-arrow"></i> Nuseir criteria</div>
             <div class="criteria-grid">
+              ${renderCriterion(r.type_score_label || 'Opportunity Value', r.type_score, r.type_score_reason)}
               ${renderCriterion('Reach', r.reach_score, r.reach_reason)}
               ${renderCriterion('Relevance', r.relevance_score, r.relevance_reason)}
               ${renderCriterion('Business', r.business_score, r.business_reason)}
+              ${renderCriterion('Time Cost', r.time_cost_score, r.time_cost_reason)}
             </div>
           </div>
           <div class="result-section">
@@ -598,7 +665,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
 
     function renderCriterion(name, score, reason) {
       const scoreText = score || 'MEDIUM';
-      const scoreClass = scoreText === 'STRONG' ? 'score-strong' : scoreText === 'WEAK' ? 'score-weak' : 'score-medium';
+      const scoreClass = getScoreClass(scoreText);
       return `
         <div class="criterion">
           <span class="criterion-name">${escapeHtml(name)}</span>
@@ -607,17 +674,26 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
         </div>`;
     }
 
+    function getScoreClass(score) {
+      if (['STRONG', 'HIGH', 'YES', 'WORTH IT'].includes(score)) return 'score-strong';
+      if (['WEAK', 'LOW', 'NO', 'NOT WORTH IT'].includes(score)) return 'score-weak';
+      return 'score-medium';
+    }
+
     function buildLarkMessage(r) {
       return `Nuseir - ${r.brand || 'This opportunity'} wants ${r.proposal_summary || r.ask || 'to collaborate'}.
+Type - ${r.opportunity_type || 'Other'}
 Timeline - ${r.timeline || 'Not stated'}
 Budget - ${r.budget || 'Not stated'}
 Social Links/Website - ${r.social_links || 'Not stated'}
 
 My take: ${r.verdict || 'MAYBE'} - ${r.one_line_take || ''}
 
+${r.type_score_label || 'Opportunity Value'}: ${r.type_score || 'MEDIUM'} - ${r.type_score_reason || ''}
 Reach: ${r.reach_score || 'MEDIUM'} - ${r.reach_reason || ''}
 Relevance: ${r.relevance_score || 'MEDIUM'} - ${r.relevance_reason || ''}
-Potential business: ${r.business_score || 'MEDIUM'} - ${r.business_reason || ''}`;
+Potential business: ${r.business_score || 'MEDIUM'} - ${r.business_reason || ''}
+Time cost: ${r.time_cost_score || 'MEDIUM'} - ${r.time_cost_reason || ''}`;
     }
 
     async function copyLarkMessage() {
@@ -635,7 +711,7 @@ Potential business: ${r.business_score || 'MEDIUM'} - ${r.business_reason || ''}
     async function addToLarkTodo() {
       const buttons = document.querySelectorAll('.copy-btn');
       const btn = buttons[1];
-      const title = `Decide on ${lastAssessment?.brand || 'collab proposal'}`;
+      const title = `Decide on ${lastAssessment?.brand || 'opportunity'}`;
       const payload = {
         title,
         details: lastLarkMessage,
