@@ -121,6 +121,70 @@ app.post('/api/assess', async (req, res) => {
   }
 });
 
+app.post('/api/lark/todo', async (req, res) => {
+  const appId = process.env.LARK_APP_ID;
+  const appSecret = process.env.LARK_APP_SECRET;
+  const taskListGuid = process.env.LARK_TASKLIST_GUID || 'b7545c13-3909-49d6-8cb5-6acf92db994f';
+
+  if (!appId || !appSecret) {
+    return res.status(500).json({
+      error: 'Lark is not connected yet. Add LARK_APP_ID and LARK_APP_SECRET in Render environment variables, then redeploy.'
+    });
+  }
+
+  try {
+    const { title, details, taskListUrl } = req.body || {};
+    if (!title || !details) {
+      return res.status(400).json({ error: 'Missing task title or details.' });
+    }
+
+    const tokenResponse = await fetch('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app_id: appId,
+        app_secret: appSecret
+      })
+    });
+    const tokenData = await tokenResponse.json();
+    const token = tokenData.tenant_access_token;
+
+    if (!tokenResponse.ok || !token) {
+      return res.status(500).json({
+        error: tokenData.msg || tokenData.error || 'Could not get Lark tenant access token.'
+      });
+    }
+
+    const createTaskUrl = process.env.LARK_TODO_CREATE_URL || 'https://open.larksuite.com/open-apis/task/v2/tasks';
+    const taskResponse = await fetch(createTaskUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        summary: title,
+        description: `${details}\n\nTask list: ${taskListUrl || `https://applink.larksuite.com/client/todo/task_list?guid=${taskListGuid}`}`,
+        tasklist_guid: taskListGuid
+      })
+    });
+
+    const taskData = await taskResponse.json();
+    if (!taskResponse.ok || taskData.code) {
+      return res.status(500).json({
+        error: taskData.msg || taskData.error?.message || 'Lark task creation failed.'
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      task: taskData.data || taskData
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not add to Lark To-Do.' });
+  }
+});
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
