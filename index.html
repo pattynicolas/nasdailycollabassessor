@@ -263,6 +263,60 @@
       flex-wrap: wrap;
     }
 
+    .criteria-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .criterion {
+      display: grid;
+      grid-template-columns: minmax(92px, 0.45fr) auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .criterion-name {
+      font-weight: 500;
+    }
+
+    .criterion-score {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: var(--radius);
+      white-space: nowrap;
+    }
+
+    .score-strong { background: var(--bg-success); color: var(--text-success); }
+    .score-medium { background: var(--bg-warning); color: var(--text-warning); }
+    .score-weak { background: var(--bg-danger); color: var(--text-danger); }
+
+    .lark-box {
+      width: 100%;
+      min-height: 150px;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 0.5px solid var(--border-mid);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .copy-btn:hover { background: var(--bg-secondary); }
+
     .error-msg {
       color: var(--text-danger);
       font-size: 13px;
@@ -334,6 +388,7 @@
 
   <script>
     const images = [];
+    let lastLarkMessage = '';
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -405,28 +460,36 @@
       btn.innerHTML = '<span class="spinner"></span> Researching & assessing...';
       resultArea.style.display = 'none';
 
-      const systemPrompt = `You are a collaboration assessor for Nuseir Yassin (Nas Daily / Nas.com), a creator with 60M+ followers. You help his EA Patty evaluate inbound collaboration pitches.
+      const systemPrompt = `You are Patty's collaboration assessor for Nuseir Yassin (Nas Daily / Nas.com). Keep the output extremely simple, executive-friendly, and easy for Nuseir to digest in under 20 seconds.
 
-Nuseir's brand: storytelling, global optimism, education, entrepreneurship, creator economy. He promotes things that are genuinely useful, globally accessible, and mission-aligned.
+Assess every opportunity using Nuseir's three criteria:
+1. Reach: Does this brand/person/opportunity have meaningful audience, distribution, credibility, or amplification?
+2. Relevance: Does it fit Nas Daily content: storytelling, global optimism, education, entrepreneurship, creator economy, useful products, or world-scale ideas?
+3. Potential business: Could this lead to revenue, a strategic relationship, useful access, a repeatable partnership, or material upside?
 
-RED FLAGS: niche audience mismatch, vague deliverables, no/low compensation for heavy asks, bad brand reputation.
-GREEN FLAGS: global reach, strong credibility, fair compensation, clear deliverables, creator/entrepreneur alignment.
+Use web search when possible to verify the brand's reach, credibility, and recent activity.
 
 Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
 {
-  "about_brand": "2-3 sentences on who this brand is",
-  "deliverables_summary": "what they are asking Nuseir to do, as plain text with - dashes for bullets",
-  "social_and_web": "any website or social links found or mentioned",
-  "web_search_insights": "what you know or found about this brand reputation, audience size, credibility, recent activity",
+  "brand": "brand/person/opportunity name, or Unknown",
   "verdict": "YES" or "MAYBE" or "NO",
-  "verdict_reason": "1-2 punchy sentences on whether Patty should flag this for Nuseir or pass"
+  "one_line_take": "one short sentence with the simple reason",
+  "reach_score": "STRONG" or "MEDIUM" or "WEAK",
+  "reach_reason": "max 14 words",
+  "relevance_score": "STRONG" or "MEDIUM" or "WEAK",
+  "relevance_reason": "max 14 words",
+  "business_score": "STRONG" or "MEDIUM" or "WEAK",
+  "business_reason": "max 14 words",
+  "ask": "what they want from Nuseir in one short sentence",
+  "next_step": "one simple action Patty should take",
+  "lark_message": "a concise Lark-ready message to Nuseir with verdict, 3 criteria, ask, and recommended next step"
 }`;
 
       const userContent = [];
       images.forEach(img => {
         userContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } });
       });
-      let userText = 'Assess this collaboration pitch for Nuseir. Use web search to research the brand.';
+      let userText = 'Assess this collaboration pitch for Nuseir using only Reach, Relevance to Nas Daily, and Potential Business.';
       if (pitchText) userText += '\n\nAdditional text:\n' + pitchText;
       userContent.push({ type: 'text', text: userText });
 
@@ -456,40 +519,85 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
       const area = document.getElementById('result-area');
       const vClass = r.verdict === 'YES' ? 'verdict-yes' : r.verdict === 'NO' ? 'verdict-no' : 'verdict-maybe';
       const vIcon = r.verdict === 'YES' ? 'ti-circle-check' : r.verdict === 'NO' ? 'ti-circle-x' : 'ti-alert-circle';
-
-      const urlMatch = r.social_and_web && r.social_and_web.match(/https?:\/\/[^\s]+/);
-      const webDisplay = urlMatch
-        ? `<a href="${urlMatch[0]}" target="_blank" rel="noopener">${urlMatch[0]}</a><br><small style="color:var(--text-secondary); font-size:13px;">${r.social_and_web.replace(urlMatch[0], '').trim()}</small>`
-        : `<span style="color:var(--text-secondary); font-size:14px;">${r.social_and_web || 'Not found in pitch'}</span>`;
+      lastLarkMessage = r.lark_message || buildLarkMessage(r);
 
       area.innerHTML = `
         <div class="result-card">
           <div class="result-section">
-            <div class="result-label"><i class="ti ti-building"></i> About the brand</div>
-            <p class="result-content">${r.about_brand}</p>
-          </div>
-          <div class="result-section">
-            <div class="result-label"><i class="ti ti-list-check"></i> Deliverables</div>
-            <p class="result-content">${r.deliverables_summary}</p>
-          </div>
-          <div class="result-section">
-            <div class="result-label"><i class="ti ti-world"></i> Website / Social</div>
-            <p class="result-content">${webDisplay}</p>
-          </div>
-          <div class="result-section">
-            <div class="result-label"><i class="ti ti-search"></i> Web research</div>
-            <p class="result-content">${r.web_search_insights}</p>
-          </div>
-          <div class="result-section">
             <div class="result-label"><i class="ti ti-flag"></i> Verdict</div>
             <div class="verdict-row">
-              <span class="verdict-badge ${vClass}"><i class="ti ${vIcon}"></i> ${r.verdict}</span>
-              <p class="result-content" style="flex:1; min-width:180px;">${r.verdict_reason}</p>
+              <span class="verdict-badge ${vClass}"><i class="ti ${vIcon}"></i> ${escapeHtml(r.verdict || 'MAYBE')}</span>
+              <p class="result-content" style="flex:1; min-width:180px;">${escapeHtml(r.one_line_take || '')}</p>
             </div>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-target-arrow"></i> Nuseir criteria</div>
+            <div class="criteria-grid">
+              ${renderCriterion('Reach', r.reach_score, r.reach_reason)}
+              ${renderCriterion('Relevance', r.relevance_score, r.relevance_reason)}
+              ${renderCriterion('Business', r.business_score, r.business_reason)}
+            </div>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-list-check"></i> Ask</div>
+            <p class="result-content">${escapeHtml(r.ask || '')}</p>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-arrow-forward-up"></i> Next step</div>
+            <p class="result-content">${escapeHtml(r.next_step || '')}</p>
+          </div>
+          <div class="result-section">
+            <div class="result-label"><i class="ti ti-message-forward"></i> Lark message</div>
+            <button class="copy-btn" onclick="copyLarkMessage()"><i class="ti ti-copy"></i> Copy for Lark</button>
+            <textarea class="lark-box" readonly>${escapeHtml(lastLarkMessage)}</textarea>
           </div>
         </div>`;
       area.style.display = 'block';
       area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderCriterion(name, score, reason) {
+      const scoreText = score || 'MEDIUM';
+      const scoreClass = scoreText === 'STRONG' ? 'score-strong' : scoreText === 'WEAK' ? 'score-weak' : 'score-medium';
+      return `
+        <div class="criterion">
+          <span class="criterion-name">${escapeHtml(name)}</span>
+          <span class="criterion-score ${scoreClass}">${escapeHtml(scoreText)}</span>
+          <span>${escapeHtml(reason || '')}</span>
+        </div>`;
+    }
+
+    function buildLarkMessage(r) {
+      return `Collab: ${r.brand || 'Unknown'}
+Verdict: ${r.verdict || 'MAYBE'} - ${r.one_line_take || ''}
+
+Reach: ${r.reach_score || 'MEDIUM'} - ${r.reach_reason || ''}
+Relevance: ${r.relevance_score || 'MEDIUM'} - ${r.relevance_reason || ''}
+Business: ${r.business_score || 'MEDIUM'} - ${r.business_reason || ''}
+
+Ask: ${r.ask || ''}
+Next: ${r.next_step || ''}`;
+    }
+
+    async function copyLarkMessage() {
+      const btn = document.querySelector('.copy-btn');
+      try {
+        await navigator.clipboard.writeText(lastLarkMessage);
+        btn.innerHTML = '<i class="ti ti-check"></i> Copied';
+        setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy"></i> Copy for Lark'; }, 1400);
+      } catch {
+        btn.innerHTML = '<i class="ti ti-alert-circle"></i> Select text below';
+        setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy"></i> Copy for Lark'; }, 1800);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
   </script>
 </body>

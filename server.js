@@ -59,20 +59,32 @@ app.post('/api/assess', async (req, res) => {
               type: 'object',
               additionalProperties: false,
               properties: {
-                about_brand: { type: 'string' },
-                deliverables_summary: { type: 'string' },
-                social_and_web: { type: 'string' },
-                web_search_insights: { type: 'string' },
+                brand: { type: 'string' },
                 verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
-                verdict_reason: { type: 'string' }
+                one_line_take: { type: 'string' },
+                reach_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+                reach_reason: { type: 'string' },
+                relevance_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+                relevance_reason: { type: 'string' },
+                business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+                business_reason: { type: 'string' },
+                ask: { type: 'string' },
+                next_step: { type: 'string' },
+                lark_message: { type: 'string' }
               },
               required: [
-                'about_brand',
-                'deliverables_summary',
-                'social_and_web',
-                'web_search_insights',
+                'brand',
                 'verdict',
-                'verdict_reason'
+                'one_line_take',
+                'reach_score',
+                'reach_reason',
+                'relevance_score',
+                'relevance_reason',
+                'business_score',
+                'business_reason',
+                'ask',
+                'next_step',
+                'lark_message'
               ]
             }
           }
