@@ -395,10 +395,7 @@
     const dropInner = document.getElementById('drop-inner');
     const fileInput = document.getElementById('file-input');
 
-    window.addEventListener('load', () => {
-      retryPendingLarkTodo();
-      retryPendingLarkMessage();
-    });
+    window.addEventListener('load', retryPendingLarkTodo);
     fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -739,11 +736,6 @@ Time cost: ${r.time_cost_score || 'MEDIUM'} - ${r.time_cost_reason || ''}`;
           body: JSON.stringify({ message })
         });
         const data = await response.json();
-        if (response.status === 401 && data.needs_lark_login) {
-          sessionStorage.setItem('pending_lark_message', JSON.stringify({ message }));
-          window.location.href = data.auth_url || '/api/lark/oauth/start';
-          return;
-        }
         if (!response.ok) throw new Error(data.error || 'Could not send message.');
 
         btn.innerHTML = '<i class="ti ti-check"></i> Sent';
@@ -752,31 +744,6 @@ Time cost: ${r.time_cost_score || 'MEDIUM'} - ${r.time_cost_reason || ''}`;
         btn.innerHTML = '<i class="ti ti-alert-circle"></i> Setup needed';
         alert(err.message || 'Could not send message.');
         setTimeout(() => { btn.innerHTML = '<i class="ti ti-send"></i> Send to Nuseir'; btn.disabled = false; }, 1800);
-      }
-    }
-
-    async function retryPendingLarkMessage() {
-      const params = new URLSearchParams(window.location.search);
-      const pending = sessionStorage.getItem('pending_lark_message');
-      if (params.get('lark_connected') !== '1' || !pending) return;
-
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
-
-      try {
-        const payload = JSON.parse(pending);
-        const response = await fetch('/api/lark/message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Could not send message.');
-
-        sessionStorage.removeItem('pending_lark_message');
-        alert('Sent to Nuseir on Lark.');
-      } catch (err) {
-        alert(err.message || 'Lark connected, but the message could not be sent.');
       }
     }
 

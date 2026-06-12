@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-user-lark-message-1',
+    version: 'scout-approved-lark-message-1',
     updated: '2026-06-12'
   });
 });
@@ -344,16 +344,7 @@ app.post('/api/lark/message', async (req, res) => {
       return res.status(400).json({ error: 'Missing message draft.' });
     }
 
-    const userSession = getLarkUserSession(req);
-    if (!userSession?.accessToken) {
-      return res.status(401).json({
-        error: 'Please connect Lark first.',
-        needs_lark_login: true,
-        auth_url: '/api/lark/oauth/start'
-      });
-    }
-
-    const token = userSession.accessToken;
+    const token = await getLarkTenantAccessToken();
     const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(receiveIdType)}`, {
       method: 'POST',
       headers: {
