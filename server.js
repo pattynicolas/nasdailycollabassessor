@@ -1,11 +1,13 @@
 import express from 'express';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const app = express();
 const port = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const larkUserSessions = new Map();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
@@ -24,9 +26,68 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'collab-assessor-lark-tasklist-diagnostics-2',
+    version: 'collab-assessor-lark-user-oauth-1',
     updated: '2026-06-12'
   });
+});
+
+app.get('/api/lark/oauth/start', (req, res) => {
+  const appId = process.env.COLLAB_ASSESSOR_LARK_APP_ID?.trim();
+  if (!appId) {
+    return res.status(500).send('Missing COLLAB_ASSESSOR_LARK_APP_ID in Render.');
+  }
+
+  const redirectUri = getLarkRedirectUri(req);
+  const state = crypto.randomBytes(16).toString('hex');
+  const authBase = process.env.LARK_OAUTH_AUTHORIZE_URL || 'https://accounts.larksuite.com/open-apis/authen/v1/index';
+  const authUrl = new URL(authBase);
+  authUrl.searchParams.set('app_id', appId);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('state', state);
+
+  res.cookie('lark_oauth_state', state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: true,
+    maxAge: 10 * 60 * 1000
+  });
+  return res.redirect(authUrl.toString());
+});
+
+app.get('/api/lark/oauth/callback', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    const cookies = parseCookies(req.headers.cookie);
+
+    if (!code || !state || cookies.lark_oauth_state !== state) {
+      return res.status(400).send('Lark login failed. Please try connecting again.');
+    }
+
+    const appToken = await getLarkAppAccessToken();
+    const tokenResult = await exchangeLarkCodeForUserToken(appToken, String(code));
+    const userAccessToken = tokenResult.access_token || tokenResult.user_access_token;
+
+    if (!userAccessToken) {
+      return res.status(500).send(`Lark did not return a user token: ${escapeText(JSON.stringify(tokenResult))}`);
+    }
+
+    const sessionId = crypto.randomBytes(24).toString('hex');
+    larkUserSessions.set(sessionId, {
+      accessToken: userAccessToken,
+      expiresAt: Date.now() + ((tokenResult.expires_in || 7200) * 1000)
+    });
+
+    res.cookie('collab_lark_session', sessionId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true,
+      maxAge: (tokenResult.expires_in || 7200) * 1000
+    });
+    res.clearCookie('lark_oauth_state');
+    return res.redirect('/?lark_connected=1');
+  } catch (error) {
+    return res.status(500).send(`Lark login failed: ${escapeText(error.message || 'Unknown error')}`);
+  }
 });
 
 app.post('/api/assess', async (req, res) => {
@@ -155,6 +216,32 @@ app.post('/api/lark/todo', async (req, res) => {
     const { title, details, taskListUrl } = req.body || {};
     if (!title || !details) {
       return res.status(400).json({ error: 'Missing task title or details.' });
+    }
+
+    const userSession = getLarkUserSession(req);
+    if (userSession?.accessToken) {
+      const userCreateResult = await createTaskInLarkList(userSession.accessToken, {
+        title,
+        description: `${details}\n\nTask list: ${taskListUrl || `https://applink.larksuite.com/client/todo/task_list?guid=${taskListGuid}`}`,
+        taskListGuid
+      });
+
+      if (userCreateResult.ok) {
+        return res.status(200).json({ ok: true, task: userCreateResult.task, auth: 'user' });
+      }
+
+      return res.status(500).json({
+        error: userCreateResult.error || 'Lark task creation failed with your login.',
+        create_attempts: userCreateResult.attempts
+      });
+    }
+
+    if (req.query.auth === 'user') {
+      return res.status(401).json({
+        error: 'Please connect Lark first.',
+        needs_lark_login: true,
+        auth_url: '/api/lark/oauth/start'
+      });
     }
 
     const tokenResponse = await fetch('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal', {
@@ -321,6 +408,88 @@ async function createTaskInLarkList(token, { title, description, taskListGuid })
     error: attempts.at(-1)?.msg || 'Lark did not accept any task list payload shape.',
     attempts
   };
+}
+
+async function getLarkAppAccessToken() {
+  const appId = process.env.COLLAB_ASSESSOR_LARK_APP_ID?.trim();
+  const appSecret = process.env.COLLAB_ASSESSOR_LARK_APP_SECRET?.trim();
+  const response = await fetch('https://open.larksuite.com/open-apis/auth/v3/app_access_token/internal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      app_id: appId,
+      app_secret: appSecret
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.code) {
+    throw new Error(data.msg || data.error || 'Could not get Lark app access token.');
+  }
+
+  return data.app_access_token;
+}
+
+async function exchangeLarkCodeForUserToken(appAccessToken, code) {
+  const tokenUrl = process.env.LARK_USER_TOKEN_URL || 'https://open.larksuite.com/open-apis/authen/v1/access_token';
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${appAccessToken}`
+    },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      code
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.code) {
+    throw new Error(data.msg || data.error || 'Could not exchange Lark login code for a user token.');
+  }
+
+  return data.data || data;
+}
+
+function getLarkUserSession(req) {
+  const sessionId = parseCookies(req.headers.cookie).collab_lark_session;
+  if (!sessionId) return null;
+
+  const session = larkUserSessions.get(sessionId);
+  if (!session) return null;
+
+  if (session.expiresAt <= Date.now()) {
+    larkUserSessions.delete(sessionId);
+    return null;
+  }
+
+  return session;
+}
+
+function getLarkRedirectUri(req) {
+  if (process.env.LARK_OAUTH_REDIRECT_URI) return process.env.LARK_OAUTH_REDIRECT_URI;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  return `${protocol}://${host}/api/lark/oauth/callback`;
+}
+
+function parseCookies(cookieHeader = '') {
+  return cookieHeader.split(';').reduce((cookies, cookie) => {
+    const index = cookie.indexOf('=');
+    if (index === -1) return cookies;
+    const key = cookie.slice(0, index).trim();
+    const value = cookie.slice(index + 1).trim();
+    cookies[key] = decodeURIComponent(value);
+    return cookies;
+  }, {});
+}
+
+function escapeText(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 async function tryAttachTaskToList(token, taskListGuid, taskGuid) {
