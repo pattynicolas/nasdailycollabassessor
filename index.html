@@ -746,6 +746,19 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return document.getElementById('lark-message-box')?.value || lastLarkMessage;
     }
 
+    function getScoutAdminKey() {
+      let key = localStorage.getItem('scout_admin_key') || '';
+      if (!key) {
+        key = prompt('Enter Patty admin key to use this restricted Scout action:') || '';
+        if (key) localStorage.setItem('scout_admin_key', key);
+      }
+      return key;
+    }
+
+    function clearScoutAdminKey() {
+      localStorage.removeItem('scout_admin_key');
+    }
+
     async function sendLarkMessage() {
       const buttons = document.querySelectorAll('.copy-btn');
       const btn = buttons[1];
@@ -760,15 +773,19 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       if (!approved) return;
 
       try {
+        const adminKey = getScoutAdminKey();
+        if (!adminKey) return;
+
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Sending...';
 
         const response = await fetch('/api/lark/message', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': adminKey },
           body: JSON.stringify({ message })
         });
         const data = await response.json();
+        if (response.status === 403) clearScoutAdminKey();
         if (!response.ok) throw new Error(data.error || 'Could not send message.');
 
         btn.innerHTML = '<i class="ti ti-check"></i> Sent';
@@ -791,16 +808,20 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       };
 
       try {
+        const adminKey = getScoutAdminKey();
+        if (!adminKey) return;
+
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Adding...';
 
         const response = await fetch('/api/lark/todo?auth=user', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': adminKey },
           body: JSON.stringify(payload)
         });
 
         const data = await response.json();
+        if (response.status === 403) clearScoutAdminKey();
         if (response.status === 401 && data.needs_lark_login) {
           sessionStorage.setItem('pending_lark_todo', JSON.stringify(payload));
           window.location.href = data.auth_url || '/api/lark/oauth/start';
@@ -829,10 +850,11 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const payload = JSON.parse(pending);
         const response = await fetch('/api/lark/todo?auth=user', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
           body: JSON.stringify(payload)
         });
         const data = await response.json();
+        if (response.status === 403) clearScoutAdminKey();
         if (!response.ok) throw new Error(data.error || 'Could not add to Lark.');
 
         sessionStorage.removeItem('pending_lark_todo');

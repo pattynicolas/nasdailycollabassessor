@@ -26,7 +26,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-bold-lark-title-2',
+    version: 'scout-admin-gate-1',
     updated: '2026-06-12'
   });
 });
@@ -228,6 +228,10 @@ app.post('/api/assess', async (req, res) => {
 });
 
 app.post('/api/lark/todo', async (req, res) => {
+  if (!isAuthorizedAdmin(req)) {
+    return res.status(403).json({ error: 'Not authorized. This action is restricted to Patty.' });
+  }
+
   const appId = process.env.COLLAB_ASSESSOR_LARK_APP_ID?.trim();
   const appSecret = process.env.COLLAB_ASSESSOR_LARK_APP_SECRET?.trim();
   const taskListGuid = process.env.COLLAB_ASSESSOR_LARK_TASKLIST_GUID?.trim() || 'b7545c13-3909-49d6-8cb5-6acf92db994f';
@@ -331,6 +335,10 @@ app.post('/api/lark/todo', async (req, res) => {
 });
 
 app.post('/api/lark/message', async (req, res) => {
+  if (!isAuthorizedAdmin(req)) {
+    return res.status(403).json({ error: 'Not authorized. This action is restricted to Patty.' });
+  }
+
   const receiveId = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
     || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
   const receiveIdType = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE?.trim()
@@ -375,6 +383,21 @@ app.post('/api/lark/message', async (req, res) => {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
   }
 });
+
+function isAuthorizedAdmin(req) {
+  const adminKey = process.env.SCOUT_ADMIN_KEY?.trim();
+  if (!adminKey) return false;
+
+  const providedKey = req.headers['x-scout-admin-key'];
+  return typeof providedKey === 'string' && timingSafeEqual(providedKey.trim(), adminKey);
+}
+
+function timingSafeEqual(a, b) {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  if (aBuffer.length !== bBuffer.length) return false;
+  return crypto.timingSafeEqual(aBuffer, bBuffer);
+}
 
 function buildLarkPostContent(message) {
   const lines = message.split(/\r?\n/);
