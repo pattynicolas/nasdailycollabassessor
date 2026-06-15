@@ -26,8 +26,8 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-recommendation-label-1',
-    updated: '2026-06-12'
+    version: 'scout-requester-credibility-1',
+    updated: '2026-06-15'
   });
 });
 
@@ -156,6 +156,8 @@ app.post('/api/assess', async (req, res) => {
                 one_line_take: { type: 'string' },
                 decision_reason: { type: 'string' },
                 proposal_summary: { type: 'string' },
+                requester_name: { type: 'string' },
+                requester_context: { type: 'string' },
                 timeline: { type: 'string' },
                 budget: { type: 'string' },
                 social_links: { type: 'string' },
@@ -168,6 +170,8 @@ app.post('/api/assess', async (req, res) => {
                 relevance_reason: { type: 'string' },
                 business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
                 business_reason: { type: 'string' },
+                credibility_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+                credibility_reason: { type: 'string' },
                 time_cost_score: { type: 'string', enum: ['WORTH IT', 'BORDERLINE', 'NOT WORTH IT'] },
                 time_cost_reason: { type: 'string' },
                 ask: { type: 'string' },
@@ -181,6 +185,8 @@ app.post('/api/assess', async (req, res) => {
                 'one_line_take',
                 'decision_reason',
                 'proposal_summary',
+                'requester_name',
+                'requester_context',
                 'timeline',
                 'budget',
                 'social_links',
@@ -193,6 +199,8 @@ app.post('/api/assess', async (req, res) => {
                 'relevance_reason',
                 'business_score',
                 'business_reason',
+                'credibility_score',
+                'credibility_reason',
                 'time_cost_score',
                 'time_cost_reason',
                 'ask',
@@ -451,6 +459,7 @@ function buildScoutAssessmentCard(assessment, fallbackMessage) {
       md(`**RECOMMENDATION**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
       { tag: 'hr' },
       md(`**SUMMARY**\n${summary}`),
+      md(`**Requester:** ${assessment.requester_name || 'Not stated'}\n**Requester Context:** ${assessment.requester_context || 'Not verified'}`),
       md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
       { tag: 'hr' },
       md(`**OPPORTUNITY TYPE**\n${formatOpportunityType(assessment.opportunity_type)}`),

@@ -506,6 +506,13 @@ Then evaluate using universal criteria:
 2. Relevance: fit with Nas Daily content, education, storytelling, entrepreneurship, global optimism, creator economy, useful products, or world-scale ideas.
 3. Potential business: revenue, strategic access, sponsors, repeatability, partnership, or material upside.
 4. Time Cost: whether this justifies Nuseir's personal attention. Attention is often scarcer than money.
+5. Requester credibility: whether the person who reached out appears real, relevant, senior enough, and connected to the stated organization.
+
+Requester credibility rules:
+- Identify the person who reached out when possible.
+- Use web search when possible to find LinkedIn/profile/context for that person and confirm they are connected to the organization.
+- If you cannot verify the requester, say so plainly and reduce confidence.
+- Never invent a LinkedIn profile or credential. Use "Not verified" when evidence is missing.
 
 Classification-specific calibration:
 
@@ -513,8 +520,9 @@ For Collaboration / Content Opportunity:
 - Do not judge only by business value.
 - Ask: Is there a compelling Nas Daily story here?
 - Consider human story, educational value, surprising insights, global relevance, viral potential, and access to unique people/places/experiences.
+- Distinguish "could be interesting" from "there is a guaranteed Nas Daily story." If access, characters, filming angle, or global hook are unclear, do not over-score story potential.
 - For pro-bono opportunities, ask: Would Nas Daily want to create content about this even with no commercial benefit?
-- If yes, increase recommendation strength.
+- If yes, increase recommendation strength. If no direct business benefit and no guaranteed story, the recommendation should usually be NO.
 - Set type_score_label to "Story Potential".
 
 For Speaking Engagement:
@@ -551,6 +559,12 @@ Final decision philosophy, in order:
 
 Before issuing YES / MAYBE / NO, ask: Will future Nuseir be glad we spent time on this opportunity? Use that as the final calibration check.
 
+Default to NO when:
+- There is no guaranteed or clearly accessible Nas Daily story.
+- There is no direct business, revenue, partnership, or strategic benefit.
+- The requester is unverified or weakly connected to the organization.
+- The opportunity is merely nice, emotional, local, or interesting but does not justify Nuseir's time.
+
 Formatting discipline:
 - Always rewrite awkward inbound phrasing into clean professional English.
 - Do not copy phrases like "wants Invitation for Nuseir" or other malformed wording.
@@ -558,6 +572,7 @@ Formatting discipline:
 - proposal_name should be a short scan-friendly name, usually the brand/event/show/foundation name.
 - proposal_summary must be 1-2 complete sentences focused on what is being proposed.
 - decision_reason should be 1 complete sentence explaining the final verdict in plain executive language.
+- requester_context should be one short sentence naming who reached out, their apparent role, and whether their profile/LinkedIn/connection was verified.
 
 Use web search when possible to verify reach, credibility, and recent activity.
 
@@ -570,6 +585,8 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
   "one_line_take": "one short sentence with the simple reason",
   "decision_reason": "one complete sentence explaining the verdict",
   "proposal_summary": "1-2 polished complete sentences explaining the proposal; rewrite awkward grammar",
+  "requester_name": "name of person who reached out, otherwise Not stated",
+  "requester_context": "short credibility context with LinkedIn/profile if found, otherwise Not verified",
   "timeline": "dates or timeline if stated, otherwise Not stated",
   "budget": "budget, fee, paid/pro-bono status if stated, otherwise Not stated",
   "social_links": "website/social links if found or stated, otherwise Not stated",
@@ -582,6 +599,8 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
   "relevance_reason": "max 14 words",
   "business_score": "STRONG" or "MEDIUM" or "WEAK",
   "business_reason": "max 14 words",
+  "credibility_score": "STRONG" or "MEDIUM" or "WEAK",
+  "credibility_reason": "max 14 words about requester/org legitimacy",
   "time_cost_score": "WORTH IT" or "BORDERLINE" or "NOT WORTH IT",
   "time_cost_reason": "max 14 words explaining whether it justifies Nuseir's attention",
   "ask": "what they want from Nuseir in one short sentence",
@@ -592,7 +611,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
       images.forEach(img => {
         userContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } });
       });
-      let userText = 'Scout this opportunity for Nuseir. Classify it first, then evaluate Reach, Relevance, Potential Business, Time Cost, and the type-specific opportunity score.';
+      let userText = 'Scout this opportunity for Nuseir. Classify it first, then evaluate Reach, Relevance, Potential Business, Requester Credibility, Time Cost, and the type-specific opportunity score.';
       if (pitchText) userText += '\n\nAdditional text:\n' + pitchText;
       userContent.push({ type: 'text', text: userText });
 
@@ -645,12 +664,17 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
             <p class="result-content">${escapeHtml(r.opportunity_type || 'Other')}</p>
           </div>
           <div class="result-section">
+            <div class="result-label"><i class="ti ti-user-search"></i> Requester check</div>
+            <p class="result-content">${escapeHtml(r.requester_context || 'Not verified')}</p>
+          </div>
+          <div class="result-section">
             <div class="result-label"><i class="ti ti-target-arrow"></i> Nuseir criteria</div>
             <div class="criteria-grid">
               ${renderCriterion(r.type_score_label || 'Opportunity Value', r.type_score, r.type_score_reason)}
               ${renderCriterion('Reach', r.reach_score, r.reach_reason)}
               ${renderCriterion('Relevance', r.relevance_score, r.relevance_reason)}
               ${renderCriterion('Business', r.business_score, r.business_reason)}
+              ${renderCriterion('Requester Credibility', r.credibility_score, r.credibility_reason)}
               ${renderCriterion('Time Cost', r.time_cost_score, r.time_cost_reason)}
             </div>
           </div>
@@ -697,6 +721,8 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
 
 ${r.proposal_summary || r.ask || 'No proposal summary available.'}
 
+Requester - ${r.requester_name || 'Not stated'}
+Requester Context - ${r.requester_context || 'Not verified'}
 Timeline - ${r.timeline || 'Not stated'}
 Budget - ${r.budget || 'Not stated'}
 Website/Social Links - ${r.social_links || 'Not stated'}
@@ -707,6 +733,7 @@ ${r.type_score_label || 'Opportunity Value'}: ${r.type_score || 'MEDIUM'}
 Reach: ${r.reach_score || 'MEDIUM'}
 Relevance: ${r.relevance_score || 'MEDIUM'}
 Potential Business: ${r.business_score || 'MEDIUM'}
+Requester Credibility: ${r.credibility_score || 'WEAK'}
 Time Cost: ${r.time_cost_score || 'BORDERLINE'}
 
 Reason:
