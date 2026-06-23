@@ -16,6 +16,34 @@ const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databa
 const proposalStatuses = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
 const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
 const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
+const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
+
+function proposalSheetRow(row) {
+  const a = row.assessment || {};
+  return [row.id, row.created_at, row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes].map(value => value ?? '');
+}
+
+async function syncGoogleSheet() {
+  const webhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL?.trim();
+  const webhookSecret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET?.trim();
+  if (!webhookUrl || !webhookSecret || !pool) return { configured: false };
+  const result = await pool.query('SELECT * FROM scout_proposals ORDER BY id');
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: webhookSecret, sheet: 'Proposals', headers: sheetHeaders, rows: result.rows.map(proposalSheetRow), synced_at: new Date().toISOString() })
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Google Sheet backup failed (${response.status}).`);
+  let payload;
+  try { payload = JSON.parse(text); } catch { payload = { ok: true }; }
+  if (payload?.ok === false) throw new Error(payload.error || 'Google Sheet backup was rejected.');
+  return { configured: true, rows: result.rowCount, ...payload };
+}
+
+function syncGoogleSheetSoon() {
+  setTimeout(() => syncGoogleSheet().catch(error => console.error('Google Sheet backup failed:', error.message)), 0);
+}
 
 async function initializeDatabase() {
   if (!pool) return;
@@ -137,6 +165,7 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
       [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), sourceText.slice(0, 50000), type, budget.slice(0, 500), id]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
+    syncGoogleSheetSoon();
     res.json({ proposal: result.rows[0] });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Could not update proposal.' });
@@ -217,6 +246,7 @@ app.post('/api/proposals/import', requireAdmin, async (req, res) => {
       );
       imported += 1;
     }
+    if (imported) syncGoogleSheetSoon();
     res.json({ imported, skipped });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Could not import proposals.' });
@@ -238,6 +268,46 @@ app.get('/api/proposals.csv', requireAdmin, async (_req, res) => {
     res.send('\uFEFF' + csv);
   } catch (error) {
     res.status(500).json({ error: error.message || 'Could not export proposals.' });
+  }
+});
+
+app.get('/api/proposals.backup.json', requireAdmin, async (_req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    await databaseReady;
+    const proposals = await pool.query('SELECT * FROM scout_proposals ORDER BY id');
+    const files = await pool.query(`
+      SELECT id, proposal_id, kind, file_name, mime_type, file_size, created_at,
+        encode(file_data, 'base64') AS file_data_base64
+      FROM scout_proposal_files ORDER BY id
+    `);
+    const backup = {
+      format: 'scout-proposals-backup',
+      version: 1,
+      exported_at: new Date().toISOString(),
+      proposal_count: proposals.rowCount,
+      attachment_count: files.rowCount,
+      proposals: proposals.rows,
+      attachments: files.rows
+    };
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="scout-full-backup-${date}.json"`);
+    res.send(JSON.stringify(backup));
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not create full backup.' });
+  }
+});
+
+app.post('/api/proposals/sync-google-sheet', requireAdmin, async (_req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    await databaseReady;
+    const result = await syncGoogleSheet();
+    if (!result.configured) return res.status(503).json({ error: 'Google Sheet backup is not configured in Render yet.' });
+    res.json(result);
+  } catch (error) {
+    res.status(502).json({ error: error.message || 'Could not sync the Google Sheet backup.' });
   }
 });
 
@@ -464,6 +534,7 @@ app.post('/api/assess', async (req, res) => {
           );
         }
         assessment.proposal_record = saved.rows[0];
+        syncGoogleSheetSoon();
       } catch (databaseError) {
         console.error('Assessment succeeded but database save failed:', databaseError.message);
         assessment.database_warning = 'Assessment completed, but it was not saved to the proposal database.';

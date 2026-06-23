@@ -503,6 +503,8 @@
           <input id="proposal-search" type="search" placeholder="Search brand, proposal, requester, or notes" oninput="scheduleProposalLoad()" />
           <select id="proposal-filter" onchange="loadProposals(false)"><option>All</option></select>
           <button class="copy-btn" onclick="downloadProposalCsv()"><i class="ti ti-download"></i> Download CSV</button>
+          <button class="copy-btn" onclick="downloadFullBackup()" title="Includes every proposal, screenshot, contract, and invoice"><i class="ti ti-database-export"></i> Full backup</button>
+          <button class="copy-btn" onclick="syncGoogleSheetBackup(event)" title="Refresh the Google Sheet backup"><i class="ti ti-brand-google-drive"></i> Sync Google Sheet</button>
           <button class="copy-btn" onclick="document.getElementById('proposal-import-file').click()"><i class="ti ti-file-upload"></i> Import proposals</button>
           <input id="proposal-import-file" type="file" accept="application/json,.json" style="display:none" onchange="importProposalFile(event)" />
           <button class="copy-btn" onclick="loadProposals(false)"><i class="ti ti-refresh"></i> Refresh</button>
@@ -1202,6 +1204,65 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       link.download = `scout-proposals-${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
+    }
+
+    async function downloadFullBackup() {
+      const button = event?.currentTarget;
+      const original = button?.innerHTML;
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="ti ti-loader-2"></i> Preparing...';
+      }
+      try {
+        const response = await fetch('/api/proposals.backup.json', {
+          headers: { 'X-Scout-Admin-Key': getScoutAdminKey() }
+        });
+        if (!response.ok) throw new Error(await responseError(response));
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="([^"]+)"/);
+        const filename = match?.[1] || `scout-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        alert(error.message || 'Could not download the full backup.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = original;
+        }
+      }
+    }
+
+    async function syncGoogleSheetBackup(event) {
+      const button = event?.currentTarget;
+      const original = button?.innerHTML;
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="ti ti-loader-2"></i> Syncing...';
+      }
+      try {
+        const response = await fetch('/api/proposals/sync-google-sheet', {
+          method: 'POST',
+          headers: { 'X-Scout-Admin-Key': getScoutAdminKey() }
+        });
+        if (!response.ok) throw new Error(await responseError(response));
+        const result = await response.json();
+        alert(`Google Sheet backup updated: ${result.rows || 0} proposals.`);
+      } catch (error) {
+        alert(error.message || 'Could not sync the Google Sheet backup.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = original;
+        }
+      }
     }
 
     async function importProposalFile(event) {
