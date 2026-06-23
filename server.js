@@ -103,6 +103,44 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/proposals/import', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const proposals = Array.isArray(req.body?.proposals) ? req.body.proposals : [];
+    if (!proposals.length || proposals.length > 200) {
+      return res.status(400).json({ error: 'Import must contain between 1 and 200 proposals.' });
+    }
+    let imported = 0;
+    let skipped = 0;
+    for (const item of proposals) {
+      const assessment = item?.assessment || item;
+      const proposalName = String(assessment?.proposal_name || '').trim();
+      if (!proposalName) {
+        skipped += 1;
+        continue;
+      }
+      const duplicate = await pool.query(
+        `SELECT 1 FROM scout_proposals WHERE LOWER(assessment->>'proposal_name') = LOWER($1) LIMIT 1`,
+        [proposalName]
+      );
+      if (duplicate.rowCount) {
+        skipped += 1;
+        continue;
+      }
+      const status = proposalStatuses.includes(item?.status) ? item.status : 'New';
+      const notes = String(item?.notes || '').slice(0, 10000);
+      await pool.query(
+        'INSERT INTO scout_proposals (assessment, source_text, status, notes) VALUES ($1::jsonb, $2, $3, $4)',
+        [JSON.stringify(assessment), String(item?.source_text || 'Imported historical Scout assessment').slice(0, 50000), status, notes]
+      );
+      imported += 1;
+    }
+    res.json({ imported, skipped });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not import proposals.' });
+  }
+});
+
 app.get('/api/proposals.csv', requireAdmin, async (_req, res) => {
   if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
   try {

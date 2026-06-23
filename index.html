@@ -434,6 +434,8 @@
           <input id="proposal-search" type="search" placeholder="Search brand, proposal, requester, or notes" oninput="scheduleProposalLoad()" />
           <select id="proposal-filter" onchange="loadProposals(false)"><option>All</option></select>
           <button class="copy-btn" onclick="downloadProposalCsv()"><i class="ti ti-download"></i> Download CSV</button>
+          <button class="copy-btn" onclick="document.getElementById('proposal-import-file').click()"><i class="ti ti-file-upload"></i> Import proposals</button>
+          <input id="proposal-import-file" type="file" accept="application/json,.json" style="display:none" onchange="importProposalFile(event)" />
           <button class="copy-btn" onclick="loadProposals(false)"><i class="ti ti-refresh"></i> Refresh</button>
         </div>
         <div class="table-wrap">
@@ -938,6 +940,27 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       link.download = `scout-proposals-${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
+    }
+
+    async function importProposalFile(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      try {
+        const payload = JSON.parse(await file.text());
+        if (!Array.isArray(payload.proposals)) throw new Error('This is not a valid Scout import file.');
+        const response = await fetch('/api/proposals/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Import failed.');
+        alert(`Imported ${data.imported} proposal${data.imported === 1 ? '' : 's'}. ${data.skipped ? `${data.skipped} duplicate or invalid record${data.skipped === 1 ? '' : 's'} skipped.` : ''}`);
+        loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Could not import proposals.');
+      }
     }
 
     function clearScoutAdminKey() {
