@@ -100,7 +100,7 @@ app.get('/api/proposals', requireAdmin, async (req, res) => {
       conditions.push(`(assessment::text ILIKE $${values.length} OR notes ILIKE $${values.length} OR source_text ILIKE $${values.length})`);
     }
     const result = await pool.query(
-      `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location,
+      `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location, p.source_text,
         p.payment_status, p.commission_breakdown, p.assessment,
         COALESCE((SELECT json_agg(json_build_object('id', f.id, 'kind', f.kind, 'file_name', f.file_name, 'mime_type', f.mime_type, 'file_size', f.file_size)) FROM scout_proposal_files f WHERE f.proposal_id = p.id), '[]'::json) AS attachments
        FROM scout_proposals p ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY p.created_at DESC LIMIT 500`,
@@ -124,6 +124,7 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     const location = String(req.body?.location || '').trim();
     const paymentStatus = String(req.body?.paymentStatus || 'Pending').trim();
     const commissionBreakdown = String(req.body?.commissionBreakdown || '');
+    const sourceText = String(req.body?.sourceText || '');
     if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
     if (!proposalStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
     if (!opportunityTypes.includes(type)) return res.status(400).json({ error: 'Invalid opportunity type.' });
@@ -131,9 +132,9 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     const result = await pool.query(
       `UPDATE scout_proposals SET status = $1, notes = $2, event_date = $3, location = $4,
        payment_status = $5, commission_breakdown = $6,
-       assessment = assessment || jsonb_build_object('opportunity_type', $7::text, 'budget', $8::text), updated_at = NOW()
-       WHERE id = $9 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, assessment`,
-      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), type, budget.slice(0, 500), id]
+       source_text = $7, assessment = assessment || jsonb_build_object('opportunity_type', $8::text, 'budget', $9::text), updated_at = NOW()
+       WHERE id = $10 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, source_text, assessment`,
+      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), sourceText.slice(0, 50000), type, budget.slice(0, 500), id]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
     res.json({ proposal: result.rows[0] });
@@ -151,7 +152,7 @@ app.post('/api/proposals/:id/files', requireAdmin, async (req, res) => {
     const mimeType = String(req.body?.mimeType || 'application/octet-stream').trim();
     const base64 = String(req.body?.data || '');
     if (!Number.isSafeInteger(proposalId) || proposalId < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
-    if (!['contract', 'invoice'].includes(kind)) return res.status(400).json({ error: 'Invalid attachment type.' });
+    if (!['contract', 'invoice', 'source'].includes(kind)) return res.status(400).json({ error: 'Invalid attachment type.' });
     if (!fileName || !base64) return res.status(400).json({ error: 'Missing attachment.' });
     const data = Buffer.from(base64, 'base64');
     if (!data.length || data.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Attachments must be 10 MB or smaller.' });
@@ -442,11 +443,26 @@ app.post('/api/assess', async (req, res) => {
     if (pool) {
       try {
         await databaseReady;
-        const sourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n').slice(0, 50000);
+        const rawSourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n');
+        const additionalMarker = 'Additional text:\n';
+        const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : '').slice(0, 50000);
         const saved = await pool.query(
           'INSERT INTO scout_proposals (assessment, source_text) VALUES ($1::jsonb, $2) RETURNING id, created_at, status',
           [JSON.stringify(assessment), sourceText]
         );
+        let screenshotIndex = 0;
+        for (const item of content.filter(item => item.type === 'image' && item.source?.data)) {
+          const imageData = Buffer.from(item.source.data, 'base64');
+          if (!imageData.length || imageData.length > 10 * 1024 * 1024) continue;
+          screenshotIndex += 1;
+          const mimeType = String(item.source.media_type || 'image/jpeg');
+          const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+          await pool.query(
+            `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+             VALUES ($1, 'source', $2, $3, $4, $5)`,
+            [saved.rows[0].id, `proposal-screenshot-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
+          );
+        }
         assessment.proposal_record = saved.rows[0];
       } catch (databaseError) {
         console.error('Assessment succeeded but database save failed:', databaseError.message);

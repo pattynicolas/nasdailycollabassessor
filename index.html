@@ -376,6 +376,11 @@
     .proposal-list { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
     .proposal-record { padding: 16px; border-bottom: 0.5px solid var(--border); }
     .proposal-record:last-child { border-bottom: none; }
+    .record-status-pending-details { background: color-mix(in srgb, var(--bg-warning) 32%, var(--bg)); border-left: 4px solid var(--text-warning); }
+    .record-status-agreed-pending-contract { background: color-mix(in srgb, var(--bg-info) 32%, var(--bg)); border-left: 4px solid var(--text-info); }
+    .record-status-rejected { background: color-mix(in srgb, var(--bg-danger) 28%, var(--bg)); border-left: 4px solid var(--text-danger); }
+    .record-status-contract-signed { background: color-mix(in srgb, var(--bg-info) 45%, var(--bg)); border-left: 4px solid var(--text-info); }
+    .record-status-delivered { background: color-mix(in srgb, var(--bg-success) 38%, var(--bg)); border-left: 4px solid var(--text-success); }
     .record-head { display: grid; grid-template-columns: 140px minmax(280px, 1fr) minmax(190px, 230px) 40px; gap: 14px; align-items: center; }
     .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; }
     .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
@@ -397,6 +402,11 @@
     .about-details > summary::-webkit-details-marker { display: none; }
     .about-details > summary::before { content: '+ '; }
     .about-details[open] > summary::before { content: '− '; }
+    .original-proposal { margin-top: 10px; display: grid; gap: 10px; }
+    .original-text { white-space: pre-wrap; padding: 10px 12px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-secondary); font-size: 12px; line-height: 1.55; max-height: 260px; overflow: auto; }
+    .source-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
+    .source-gallery button { padding: 0; border: .5px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); cursor: zoom-in; }
+    .source-gallery img { display: block; width: 100%; height: 150px; object-fit: cover; }
     .proposal-notes { min-height: 66px; min-width: 220px; font-size: 13px; line-height: 1.4; }
     .save-state { display: block; color: var(--text-secondary); font-size: 11px; margin-top: 4px; min-height: 15px; }
     .empty-state { color: var(--text-secondary); text-align: center; padding: 2rem; font-size: 14px; }
@@ -500,6 +510,7 @@
     let lastAssessment = null;
     let proposalDatabaseOpen = false;
     let proposalLoadTimer = null;
+    let sourcePreviewUrls = [];
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -936,6 +947,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         return;
       }
       const sortedProposals = [...proposals].sort(compareProposalDates);
+      sourcePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+      sourcePreviewUrls = [];
       rows.innerHTML = sortedProposals.map(proposal => {
         const a = proposal.assessment || {};
         const statusOptions = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
@@ -944,14 +957,14 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           .map(type => `<option${type === a.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
         const paymentOptions = ['Pending', 'Paid', 'Pro-Bono'].map(value => `<option${value === proposal.payment_status ? ' selected' : ''}>${value}</option>`).join('');
         const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
-        return `<article class="proposal-record">
+        return `<article class="proposal-record record-${getStatusClass(proposal.status)}">
           <div class="record-head">
             <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
-            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
-            <div><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
+            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
+            <div class="record-field status-wrap"><label>Status</label><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
             <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
           </div>
-          <details class="record-details about-details"><summary>View proposal</summary><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div></details>
+          <details class="record-details about-details"><summary>View original proposal</summary>${renderOriginalProposal(proposal)}</details>
           <div class="record-editor" id="editor-${proposal.id}">
           <div class="record-fields">
             <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
@@ -960,7 +973,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
           </div>
           <hr class="editor-divider"><div class="proposal-detail-grid">
-          <div><div class="field-label"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
+          <div><div class="field-label"><i class="ti ti-file-description"></i> Original proposal</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
           <div class="agreement-panel" id="agreement-${proposal.id}" style="display:${agreed ? 'block' : 'none'}">
             <div class="field-label"><i class="ti ti-file-dollar"></i> Agreement & payment</div>
             <div class="agreement-grid">
@@ -972,6 +985,44 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           </div>
         </div></div></article>`;
       }).join('');
+      loadSourcePreviews();
+    }
+
+    function renderOriginalProposal(proposal) {
+      const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
+      const text = cleanSourceText(proposal.source_text);
+      if (!sourceFiles.length && !text) return '<div class="original-proposal"><div class="original-text">Original screenshots or pasted text were not stored for this historical record.</div></div>';
+      return `<div class="original-proposal">
+        ${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}
+        ${text ? `<div class="original-text">${escapeHtml(text)}</div>` : ''}
+      </div>`;
+    }
+
+    function cleanSourceText(value) {
+      let text = String(value || '').trim();
+      const marker = 'Additional text:\n';
+      if (text.includes(marker)) text = text.split(marker).slice(1).join(marker).trim();
+      if (/^Imported historical Scout assessment\.?$/i.test(text)) text = '';
+      return text;
+    }
+
+    async function loadSourcePreviews() {
+      const key = localStorage.getItem('scout_admin_key') || '';
+      if (!key) return;
+      await Promise.all(Array.from(document.querySelectorAll('img[data-source-file]')).map(async img => {
+        try {
+          const response = await fetch(`/api/proposals/files/${img.dataset.sourceFile}`, { headers: { 'X-Scout-Admin-Key': key } });
+          if (!response.ok) return;
+          const url = URL.createObjectURL(await response.blob());
+          sourcePreviewUrls.push(url);
+          img.src = url;
+        } catch {}
+      }));
+    }
+
+    function openSourcePreview(fileId) {
+      const image = document.querySelector(`img[data-source-file="${fileId}"]`);
+      if (image?.src) window.open(image.src, '_blank', 'noopener');
     }
 
     function getStatusClass(status) {
@@ -981,6 +1032,11 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     function updateStatusStyle(select) {
       Array.from(select.classList).filter(name => name.startsWith('status-') && name !== 'status-select').forEach(name => select.classList.remove(name));
       select.classList.add(getStatusClass(select.value));
+      const record = select.closest('.proposal-record');
+      if (record) {
+        Array.from(record.classList).filter(name => name.startsWith('record-status-')).forEach(name => record.classList.remove(name));
+        record.classList.add('record-' + getStatusClass(select.value));
+      }
     }
 
     function toggleRecordEditor(id, button) {
@@ -1038,7 +1094,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             eventDate: document.getElementById(`date-${id}`).value,
             location: document.getElementById(`location-${id}`).value,
             paymentStatus: document.getElementById(`payment-${id}`)?.value || 'Pending',
-            commissionBreakdown: document.getElementById(`commission-${id}`)?.value || ''
+            commissionBreakdown: document.getElementById(`commission-${id}`)?.value || '',
+            sourceText: document.getElementById(`source-text-${id}`)?.value || ''
           })
         });
         const data = await response.json();
