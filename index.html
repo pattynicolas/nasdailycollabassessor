@@ -374,14 +374,24 @@
     }
     .database-toolbar input { flex: 1; min-width: 190px; }
     .proposal-list { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-    .proposal-record { padding: 14px; border-bottom: 0.5px solid var(--border); }
+    .proposal-record { padding: 16px; border-bottom: 0.5px solid var(--border); }
     .proposal-record:last-child { border-bottom: none; }
-    .record-head { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(190px, 240px) minmax(190px, 230px); gap: 14px; align-items: start; }
-    .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .record-head { display: grid; grid-template-columns: 140px minmax(280px, 1fr) minmax(190px, 230px) 40px; gap: 14px; align-items: center; }
+    .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; }
     .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
-    .proposal-title { font-weight: 600; margin-bottom: 3px; }
+    .proposal-title { font-size: 16px; font-weight: 650; margin-bottom: 5px; }
+    .proposal-meta { color: var(--text-secondary); font-size: 12px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .proposal-summary { color: var(--text-secondary); line-height: 1.55; margin-top: 7px; }
-    .prominent-date { border: 1px solid var(--border-mid); background: var(--bg-info); color: var(--text); font-size: 14px; font-weight: 600; }
+    .date-card { min-height: 58px; display: flex; flex-direction: column; justify-content: center; padding: 8px 10px; border-radius: var(--radius); background: var(--bg-info); color: var(--text-info); }
+    .date-card strong { color: var(--text); font-size: 13px; line-height: 1.25; }
+    .date-card span { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+    .status-select { font-weight: 600; }
+    .status-pending-details { background: var(--bg-warning); color: var(--text-warning); }
+    .status-agreed-pending-contract, .status-contract-signed { background: var(--bg-info); color: var(--text-info); }
+    .status-rejected { background: var(--bg-danger); color: var(--text-danger); }
+    .status-delivered { background: var(--bg-success); color: var(--text-success); }
+    .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: .5px solid var(--border-mid); border-radius: var(--radius); background: var(--bg); color: var(--text); cursor: pointer; font-size: 17px; }
+    .icon-btn:hover { background: var(--bg-secondary); }
     .about-details { margin-top: 10px; }
     .about-details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; font-weight: 600; list-style: none; }
     .about-details > summary::-webkit-details-marker { display: none; }
@@ -395,12 +405,15 @@
       background: var(--bg); color: var(--text); font: inherit; font-size: 12px; padding: 7px 8px;
     }
     .tracker-select.type-select { min-width: 190px; }
-    .record-details { margin-top: 10px; border-top: .5px solid var(--border); padding-top: 9px; }
+    .record-details { margin: 10px 0 0 154px; }
     .record-details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; font-weight: 600; list-style: none; }
     .record-details > summary::-webkit-details-marker { display: none; }
     .record-details > summary::before { content: '+ '; }
     .record-details[open] > summary::before { content: '− '; }
     .proposal-detail-grid { margin-top: 12px; }
+    .record-editor { display: none; margin: 14px 0 0 154px; padding: 14px; border-radius: var(--radius); background: var(--bg-secondary); }
+    .record-editor.open { display: block; }
+    .editor-divider { border: 0; border-top: .5px solid var(--border); margin: 14px 0; }
     .proposal-detail-grid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.4fr); gap: 16px; }
     .agreement-panel { border-left: 2px solid var(--border-mid); padding-left: 16px; }
     .agreement-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: start; }
@@ -410,7 +423,7 @@
     .status-guide { margin-top: 12px; border: .5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .status-guide summary { cursor: pointer; font-size: 13px; font-weight: 600; }
     .status-guide-grid { display: grid; grid-template-columns: 180px 1fr; gap: 7px 12px; margin-top: 10px; font-size: 12px; line-height: 1.45; }
-    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid { grid-template-columns: 1fr; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
+    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
   </style>
 </head>
 <body>
@@ -933,16 +946,20 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
         return `<article class="proposal-record">
           <div class="record-head">
-            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><details class="about-details"><summary>About</summary><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div></details></div>
-            <div class="record-field"><label>Engagement Date</label><input class="tracker-input prominent-date" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onblur="saveProposal(${proposal.id})"></div>
-            <div><select class="tracker-select" id="status-${proposal.id}" onchange="toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
+            <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
+            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
+            <div><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
+            <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
           </div>
+          <details class="record-details about-details"><summary>View proposal</summary><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div></details>
+          <div class="record-editor" id="editor-${proposal.id}">
           <div class="record-fields">
             <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
             <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
+            <div class="record-field"><label>Engagement Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onblur="saveProposal(${proposal.id})"></div>
             <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
           </div>
-          <details class="record-details"><summary>Notes, payment & documents</summary><div class="proposal-detail-grid">
+          <hr class="editor-divider"><div class="proposal-detail-grid">
           <div><div class="field-label"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
           <div class="agreement-panel" id="agreement-${proposal.id}" style="display:${agreed ? 'block' : 'none'}">
             <div class="field-label"><i class="ti ti-file-dollar"></i> Agreement & payment</div>
@@ -953,8 +970,24 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
               <label>Patty's commission</label><textarea class="proposal-notes" id="commission-${proposal.id}" placeholder="Amount, percentage, payment timing, or calculation..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.commission_breakdown || '')}</textarea>
             </div>
           </div>
-        </div></details></article>`;
+        </div></div></article>`;
       }).join('');
+    }
+
+    function getStatusClass(status) {
+      return 'status-' + String(status || 'Pending Details').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    function updateStatusStyle(select) {
+      Array.from(select.classList).filter(name => name.startsWith('status-') && name !== 'status-select').forEach(name => select.classList.remove(name));
+      select.classList.add(getStatusClass(select.value));
+    }
+
+    function toggleRecordEditor(id, button) {
+      const editor = document.getElementById(`editor-${id}`);
+      const open = editor.classList.toggle('open');
+      button.innerHTML = `<i class="ti ${open ? 'ti-x' : 'ti-pencil'}"></i>`;
+      button.title = open ? 'Close editor' : 'Edit proposal';
     }
 
     function compareProposalDates(a, b) {
