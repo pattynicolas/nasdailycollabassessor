@@ -57,9 +57,11 @@
     }
 
     .container {
-      max-width: 640px;
+      max-width: 1120px;
       margin: 0 auto;
     }
+
+    .assessor-column { max-width: 640px; margin: 0 auto; }
 
     header {
       margin-bottom: 2rem;
@@ -349,10 +351,43 @@
       text-align: center;
       margin-top: 6px;
     }
+
+    .database-card { margin-top: 1.5rem; }
+    .database-header, .database-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .database-header h2 { font-size: 17px; font-weight: 600; }
+    .database-header p { color: var(--text-secondary); font-size: 13px; margin-top: 3px; }
+    .database-toolbar { margin: 1rem 0; justify-content: flex-start; }
+    .database-toolbar input, .database-toolbar select, .proposal-status {
+      border: 0.5px solid var(--border-mid);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      padding: 8px 10px;
+    }
+    .database-toolbar input { flex: 1; min-width: 190px; }
+    .table-wrap { overflow-x: auto; border: 0.5px solid var(--border); border-radius: var(--radius); }
+    .proposal-table { width: 100%; border-collapse: collapse; min-width: 930px; }
+    .proposal-table th, .proposal-table td { padding: 10px; border-bottom: 0.5px solid var(--border); text-align: left; vertical-align: top; font-size: 13px; }
+    .proposal-table th { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; background: var(--bg-secondary); }
+    .proposal-table tr:last-child td { border-bottom: none; }
+    .proposal-title { font-weight: 600; margin-bottom: 3px; }
+    .proposal-summary { color: var(--text-secondary); line-height: 1.45; max-width: 330px; }
+    .proposal-notes { min-height: 66px; min-width: 220px; font-size: 13px; line-height: 1.4; }
+    .save-state { display: block; color: var(--text-secondary); font-size: 11px; margin-top: 4px; min-height: 15px; }
+    .empty-state { color: var(--text-secondary); text-align: center; padding: 2rem; font-size: 14px; }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="assessor-column">
     <header>
       <h1><i class="ti ti-radar"></i> Scout</h1>
       <p>The opportunity scout for Nuseir: sharp-eyed, story-hungry, and allergic to wasted time.</p>
@@ -384,12 +419,39 @@
     </div>
 
     <div id="result-area" style="display:none;"></div>
+    </div>
+
+    <section class="card database-card">
+      <div class="database-header">
+        <div>
+          <h2><i class="ti ti-database"></i> Proposal Database</h2>
+          <p>Every Scout assessment, its current status, and your working notes.</p>
+        </div>
+        <button class="copy-btn" id="open-database-btn" onclick="loadProposals()"><i class="ti ti-lock-open"></i> Open database</button>
+      </div>
+      <div id="database-content" style="display:none;">
+        <div class="database-toolbar">
+          <input id="proposal-search" type="search" placeholder="Search brand, proposal, requester, or notes" oninput="scheduleProposalLoad()" />
+          <select id="proposal-filter" onchange="loadProposals(false)"><option>All</option></select>
+          <button class="copy-btn" onclick="downloadProposalCsv()"><i class="ti ti-download"></i> Download CSV</button>
+          <button class="copy-btn" onclick="loadProposals(false)"><i class="ti ti-refresh"></i> Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table class="proposal-table">
+            <thead><tr><th>Date</th><th>Proposal</th><th>Recommendation</th><th>Status</th><th>Notes</th></tr></thead>
+            <tbody id="proposal-rows"><tr><td colspan="5" class="empty-state">Loading proposals...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script>
     const images = [];
     let lastLarkMessage = '';
     let lastAssessment = null;
+    let proposalDatabaseOpen = false;
+    let proposalLoadTimer = null;
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -634,6 +696,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
         }
         if (!response.ok) throw new Error(data.error || 'Assessment failed.');
         renderResult(data);
+        if (proposalDatabaseOpen) loadProposals(false);
       } catch (err) {
         errorEl.textContent = err.message || 'Something went wrong. Check your connection and try again.';
         errorEl.style.display = 'block';
@@ -780,6 +843,101 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         if (key) localStorage.setItem('scout_admin_key', key);
       }
       return key;
+    }
+
+    function scheduleProposalLoad() {
+      clearTimeout(proposalLoadTimer);
+      proposalLoadTimer = setTimeout(() => loadProposals(false), 300);
+    }
+
+    async function loadProposals(promptForKey = true) {
+      const key = promptForKey ? getScoutAdminKey() : (localStorage.getItem('scout_admin_key') || getScoutAdminKey());
+      if (!key) return;
+      const content = document.getElementById('database-content');
+      const rows = document.getElementById('proposal-rows');
+      content.style.display = 'block';
+      rows.innerHTML = '<tr><td colspan="5" class="empty-state"><span class="spinner"></span> Loading proposals...</td></tr>';
+      try {
+        const params = new URLSearchParams({
+          search: document.getElementById('proposal-search').value.trim(),
+          status: document.getElementById('proposal-filter').value
+        });
+        const response = await fetch('/api/proposals?' + params, { headers: { 'X-Scout-Admin-Key': key } });
+        const data = await response.json();
+        if (response.status === 403) clearScoutAdminKey();
+        if (!response.ok) throw new Error(data.error || 'Could not load proposals.');
+        proposalDatabaseOpen = true;
+        renderProposalFilters(data.statuses || []);
+        renderProposalRows(data.proposals || []);
+        document.getElementById('open-database-btn').innerHTML = '<i class="ti ti-database-check"></i> Database open';
+      } catch (error) {
+        rows.innerHTML = `<tr><td colspan="5" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+      }
+    }
+
+    function renderProposalFilters(statuses) {
+      const select = document.getElementById('proposal-filter');
+      const current = select.value || 'All';
+      select.innerHTML = ['All', ...statuses].map(status => `<option${status === current ? ' selected' : ''}>${escapeHtml(status)}</option>`).join('');
+    }
+
+    function renderProposalRows(proposals) {
+      const rows = document.getElementById('proposal-rows');
+      if (!proposals.length) {
+        rows.innerHTML = '<tr><td colspan="5" class="empty-state">No proposals match this view.</td></tr>';
+        return;
+      }
+      rows.innerHTML = proposals.map(proposal => {
+        const a = proposal.assessment || {};
+        const statusOptions = ['New', 'Reviewing', 'Needs Info', 'Approved', 'Rejected', 'Sent to Nuseir', 'Completed']
+          .map(status => `<option${status === proposal.status ? ' selected' : ''}>${status}</option>`).join('');
+        return `<tr>
+          <td>${escapeHtml(formatProposalDate(proposal.created_at))}</td>
+          <td><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.opportunity_type || 'Other')}<br>${escapeHtml(a.proposal_summary || '')}</div></td>
+          <td><span class="verdict-badge ${a.verdict === 'YES' ? 'verdict-yes' : a.verdict === 'NO' ? 'verdict-no' : 'verdict-maybe'}">${escapeHtml(a.verdict || 'MAYBE')}</span></td>
+          <td><select class="proposal-status" id="status-${proposal.id}" onchange="saveProposal(${proposal.id})">${statusOptions}</select></td>
+          <td><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea><span class="save-state" id="save-${proposal.id}"></span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function formatProposalDate(value) {
+      if (!value) return '';
+      return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
+    }
+
+    async function saveProposal(id) {
+      const state = document.getElementById(`save-${id}`);
+      state.textContent = 'Saving...';
+      try {
+        const response = await fetch(`/api/proposals/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify({ status: document.getElementById(`status-${id}`).value, notes: document.getElementById(`notes-${id}`).value })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not save.');
+        state.textContent = 'Saved';
+        setTimeout(() => { state.textContent = ''; }, 1400);
+      } catch (error) {
+        state.textContent = error.message;
+      }
+    }
+
+    async function downloadProposalCsv() {
+      const response = await fetch('/api/proposals.csv', { headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || 'Could not download CSV.');
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `scout-proposals-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
     }
 
     function clearScoutAdminKey() {

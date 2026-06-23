@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import pg from 'pg';
 import { fileURLToPath } from 'node:url';
 
 const app = express();
@@ -8,6 +9,31 @@ const port = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const larkUserSessions = new Map();
+const { Pool } = pg;
+const databaseUrl = process.env.DATABASE_URL?.trim();
+const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } }) : null;
+
+const proposalStatuses = ['New', 'Reviewing', 'Needs Info', 'Approved', 'Rejected', 'Sent to Nuseir', 'Completed'];
+
+async function initializeDatabase() {
+  if (!pool) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scout_proposals (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status TEXT NOT NULL DEFAULT 'New',
+      notes TEXT NOT NULL DEFAULT '',
+      source_text TEXT NOT NULL DEFAULT '',
+      assessment JSONB NOT NULL
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS scout_proposals_created_at_idx ON scout_proposals (created_at DESC)');
+}
+
+const databaseReady = initializeDatabase().catch(error => {
+  console.error('Scout database initialization failed:', error.message);
+});
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
@@ -26,9 +52,73 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-requester-credibility-1',
-    updated: '2026-06-15'
+    version: 'scout-proposal-database-1',
+    updated: '2026-06-23',
+    database: Boolean(pool)
   });
+});
+
+app.get('/api/proposals', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected. Add DATABASE_URL in Render.' });
+  try {
+    await databaseReady;
+    const search = String(req.query.search || '').trim();
+    const status = String(req.query.status || '').trim();
+    const values = [];
+    const conditions = [];
+    if (status && status !== 'All') {
+      values.push(status);
+      conditions.push(`status = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(`(assessment::text ILIKE $${values.length} OR notes ILIKE $${values.length} OR source_text ILIKE $${values.length})`);
+    }
+    const result = await pool.query(
+      `SELECT id, created_at, updated_at, status, notes, assessment FROM scout_proposals ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT 500`,
+      values
+    );
+    res.json({ proposals: result.rows, statuses: proposalStatuses });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not load proposals.' });
+  }
+});
+
+app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const id = Number(req.params.id);
+    const status = String(req.body?.status || '').trim();
+    const notes = String(req.body?.notes ?? '');
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
+    if (!proposalStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+    const result = await pool.query(
+      'UPDATE scout_proposals SET status = $1, notes = $2, updated_at = NOW() WHERE id = $3 RETURNING id, created_at, updated_at, status, notes, assessment',
+      [status, notes.slice(0, 10000), id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
+    res.json({ proposal: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not update proposal.' });
+  }
+});
+
+app.get('/api/proposals.csv', requireAdmin, async (_req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const result = await pool.query('SELECT id, created_at, updated_at, status, notes, assessment FROM scout_proposals ORDER BY created_at DESC');
+    const headers = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
+    const rows = result.rows.map(row => {
+      const a = row.assessment || {};
+      return [row.id, row.created_at?.toISOString?.() || row.created_at, row.updated_at?.toISOString?.() || row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes];
+    });
+    const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="scout-proposals-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not export proposals.' });
+  }
 });
 
 app.get('/api/lark/oauth/start', (req, res) => {
@@ -229,7 +319,24 @@ app.post('/api/assess', async (req, res) => {
       return res.status(500).json({ error: 'OpenAI returned no assessment text.' });
     }
 
-    return res.status(200).json(JSON.parse(outputText));
+    const assessment = JSON.parse(outputText);
+    if (pool) {
+      try {
+        await databaseReady;
+        const sourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n').slice(0, 50000);
+        const saved = await pool.query(
+          'INSERT INTO scout_proposals (assessment, source_text) VALUES ($1::jsonb, $2) RETURNING id, created_at, status',
+          [JSON.stringify(assessment), sourceText]
+        );
+        assessment.proposal_record = saved.rows[0];
+      } catch (databaseError) {
+        console.error('Assessment succeeded but database save failed:', databaseError.message);
+        assessment.database_warning = 'Assessment completed, but it was not saved to the proposal database.';
+      }
+    } else {
+      assessment.database_warning = 'Assessment completed, but DATABASE_URL is not configured.';
+    }
+    return res.status(200).json(assessment);
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Assessment failed.' });
   }
@@ -400,6 +507,18 @@ function isAuthorizedAdmin(req) {
 
   const providedKey = req.headers['x-scout-admin-key'];
   return typeof providedKey === 'string' && timingSafeEqual(providedKey.trim(), adminKey);
+}
+
+function requireAdmin(req, res, next) {
+  if (!isAuthorizedAdmin(req)) {
+    return res.status(403).json({ error: 'Not authorized. The proposal database is restricted to Patty.' });
+  }
+  next();
+}
+
+function csvCell(value) {
+  const text = value == null ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
 }
 
 function timingSafeEqual(a, b) {
