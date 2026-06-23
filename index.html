@@ -376,11 +376,17 @@
     .proposal-list { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
     .proposal-record { padding: 14px; border-bottom: 0.5px solid var(--border); }
     .proposal-record:last-child { border-bottom: none; }
-    .record-head { display: grid; grid-template-columns: minmax(300px, 1fr) auto minmax(190px, 230px); gap: 14px; align-items: start; }
-    .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .record-head { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(190px, 240px) minmax(190px, 230px); gap: 14px; align-items: start; }
+    .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; margin-top: 12px; }
     .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
     .proposal-title { font-weight: 600; margin-bottom: 3px; }
-    .proposal-summary { color: var(--text-secondary); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .proposal-summary { color: var(--text-secondary); line-height: 1.55; margin-top: 7px; }
+    .prominent-date { border: 1px solid var(--border-mid); background: var(--bg-info); color: var(--text); font-size: 14px; font-weight: 600; }
+    .about-details { margin-top: 10px; }
+    .about-details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; font-weight: 600; list-style: none; }
+    .about-details > summary::-webkit-details-marker { display: none; }
+    .about-details > summary::before { content: '+ '; }
+    .about-details[open] > summary::before { content: '− '; }
     .proposal-notes { min-height: 66px; min-width: 220px; font-size: 13px; line-height: 1.4; }
     .save-state { display: block; color: var(--text-secondary); font-size: 11px; margin-top: 4px; min-height: 15px; }
     .empty-state { color: var(--text-secondary); text-align: center; padding: 2rem; font-size: 14px; }
@@ -916,7 +922,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         rows.innerHTML = '<div class="empty-state">No proposals match this view.</div>';
         return;
       }
-      rows.innerHTML = proposals.map(proposal => {
+      const sortedProposals = [...proposals].sort(compareProposalDates);
+      rows.innerHTML = sortedProposals.map(proposal => {
         const a = proposal.assessment || {};
         const statusOptions = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
           .map(status => `<option${status === proposal.status ? ' selected' : ''}>${status}</option>`).join('');
@@ -926,14 +933,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
         return `<article class="proposal-record">
           <div class="record-head">
-            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || '')}</div></div>
-            <span class="verdict-badge ${a.verdict === 'YES' ? 'verdict-yes' : a.verdict === 'NO' ? 'verdict-no' : 'verdict-maybe'}">${escapeHtml(a.verdict || 'MAYBE')}</span>
+            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><details class="about-details"><summary>About</summary><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div></details></div>
+            <div class="record-field"><label>Engagement Date</label><input class="tracker-input prominent-date" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onblur="saveProposal(${proposal.id})"></div>
             <div><select class="tracker-select" id="status-${proposal.id}" onchange="toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
           </div>
           <div class="record-fields">
             <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
             <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
-            <div class="record-field"><label>Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date or timeline" onblur="saveProposal(${proposal.id})"></div>
             <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
           </div>
           <details class="record-details"><summary>Notes, payment & documents</summary><div class="proposal-detail-grid">
@@ -949,6 +955,25 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           </div>
         </div></details></article>`;
       }).join('');
+    }
+
+    function compareProposalDates(a, b) {
+      const dateA = parseEngagementDate(a.event_date || a.assessment?.timeline);
+      const dateB = parseEngagementDate(b.event_date || b.assessment?.timeline);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const category = date => date === Number.MAX_SAFE_INTEGER ? 2 : date >= today.getTime() ? 0 : 1;
+      const categoryA = category(dateA);
+      const categoryB = category(dateB);
+      if (categoryA !== categoryB) return categoryA - categoryB;
+      if (dateA !== dateB) return categoryA === 1 ? dateB - dateA : dateA - dateB;
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    }
+
+    function parseEngagementDate(value) {
+      const text = String(value || '').trim();
+      if (!text || /not stated|unknown|tbd|flexible/i.test(text)) return Number.MAX_SAFE_INTEGER;
+      const timestamp = Date.parse(text);
+      return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
     }
 
     function renderAttachments(proposal, kind) {
