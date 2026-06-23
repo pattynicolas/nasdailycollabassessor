@@ -373,13 +373,14 @@
       padding: 8px 10px;
     }
     .database-toolbar input { flex: 1; min-width: 190px; }
-    .table-wrap { overflow-x: auto; border: 0.5px solid var(--border); border-radius: var(--radius); }
-    .proposal-table { width: 100%; border-collapse: collapse; min-width: 930px; }
-    .proposal-table th, .proposal-table td { padding: 10px; border-bottom: 0.5px solid var(--border); text-align: left; vertical-align: top; font-size: 13px; }
-    .proposal-table th { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; background: var(--bg-secondary); }
-    .proposal-table tr:last-child td { border-bottom: none; }
+    .proposal-list { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .proposal-record { padding: 14px; border-bottom: 0.5px solid var(--border); }
+    .proposal-record:last-child { border-bottom: none; }
+    .record-head { display: grid; grid-template-columns: minmax(300px, 1fr) auto minmax(190px, 230px); gap: 14px; align-items: start; }
+    .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
     .proposal-title { font-weight: 600; margin-bottom: 3px; }
-    .proposal-summary { color: var(--text-secondary); line-height: 1.45; max-width: 330px; }
+    .proposal-summary { color: var(--text-secondary); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .proposal-notes { min-height: 66px; min-width: 220px; font-size: 13px; line-height: 1.4; }
     .save-state { display: block; color: var(--text-secondary); font-size: 11px; margin-top: 4px; min-height: 15px; }
     .empty-state { color: var(--text-secondary); text-align: center; padding: 2rem; font-size: 14px; }
@@ -388,7 +389,12 @@
       background: var(--bg); color: var(--text); font: inherit; font-size: 12px; padding: 7px 8px;
     }
     .tracker-select.type-select { min-width: 190px; }
-    .proposal-detail-row td { background: var(--bg-secondary); padding: 14px; }
+    .record-details { margin-top: 10px; border-top: .5px solid var(--border); padding-top: 9px; }
+    .record-details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; font-weight: 600; list-style: none; }
+    .record-details > summary::-webkit-details-marker { display: none; }
+    .record-details > summary::before { content: '+ '; }
+    .record-details[open] > summary::before { content: '− '; }
+    .proposal-detail-grid { margin-top: 12px; }
     .proposal-detail-grid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.4fr); gap: 16px; }
     .agreement-panel { border-left: 2px solid var(--border-mid); padding-left: 16px; }
     .agreement-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: start; }
@@ -398,7 +404,7 @@
     .status-guide { margin-top: 12px; border: .5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .status-guide summary { cursor: pointer; font-size: 13px; font-weight: 600; }
     .status-guide-grid { display: grid; grid-template-columns: 180px 1fr; gap: 7px 12px; margin-top: 10px; font-size: 12px; line-height: 1.45; }
-    @media (max-width: 760px) { .proposal-detail-grid { grid-template-columns: 1fr; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
+    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid { grid-template-columns: 1fr; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
   </style>
 </head>
 <body>
@@ -464,12 +470,7 @@
           <input id="proposal-import-file" type="file" accept="application/json,.json" style="display:none" onchange="importProposalFile(event)" />
           <button class="copy-btn" onclick="loadProposals(false)"><i class="ti ti-refresh"></i> Refresh</button>
         </div>
-        <div class="table-wrap">
-          <table class="proposal-table">
-            <thead><tr><th>Proposal</th><th>Recommendation</th><th>Type</th><th>Budget</th><th>Date</th><th>Location</th><th>Status</th></tr></thead>
-            <tbody id="proposal-rows"><tr><td colspan="7" class="empty-state">Loading proposals...</td></tr></tbody>
-          </table>
-        </div>
+        <div class="proposal-list" id="proposal-rows"><div class="empty-state">Loading proposals...</div></div>
       </div>
     </section>
   </div>
@@ -884,7 +885,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const content = document.getElementById('database-content');
       const rows = document.getElementById('proposal-rows');
       content.style.display = 'block';
-      rows.innerHTML = '<tr><td colspan="7" class="empty-state"><span class="spinner"></span> Loading proposals...</td></tr>';
+      rows.innerHTML = '<div class="empty-state"><span class="spinner"></span> Loading proposals...</div>';
       try {
         const params = new URLSearchParams({
           search: document.getElementById('proposal-search').value.trim(),
@@ -899,7 +900,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         renderProposalRows(data.proposals || []);
         document.getElementById('open-database-btn').innerHTML = '<i class="ti ti-database-check"></i> Database open';
       } catch (error) {
-        rows.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+        rows.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
       }
     }
 
@@ -912,7 +913,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     function renderProposalRows(proposals) {
       const rows = document.getElementById('proposal-rows');
       if (!proposals.length) {
-        rows.innerHTML = '<tr><td colspan="7" class="empty-state">No proposals match this view.</td></tr>';
+        rows.innerHTML = '<div class="empty-state">No proposals match this view.</div>';
         return;
       }
       rows.innerHTML = proposals.map(proposal => {
@@ -923,16 +924,19 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           .map(type => `<option${type === a.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
         const paymentOptions = ['Pending', 'Paid', 'Pro-Bono'].map(value => `<option${value === proposal.payment_status ? ' selected' : ''}>${value}</option>`).join('');
         const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
-        return `<tr>
-          <td><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || '')}</div></td>
-          <td><span class="verdict-badge ${a.verdict === 'YES' ? 'verdict-yes' : a.verdict === 'NO' ? 'verdict-no' : 'verdict-maybe'}">${escapeHtml(a.verdict || 'MAYBE')}</span></td>
-          <td><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></td>
-          <td><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></td>
-          <td><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date or timeline" onblur="saveProposal(${proposal.id})"></td>
-          <td><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></td>
-          <td><select class="tracker-select" id="status-${proposal.id}" onchange="toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></td>
-        </tr>
-        <tr class="proposal-detail-row"><td colspan="7"><div class="proposal-detail-grid">
+        return `<article class="proposal-record">
+          <div class="record-head">
+            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || '')}</div></div>
+            <span class="verdict-badge ${a.verdict === 'YES' ? 'verdict-yes' : a.verdict === 'NO' ? 'verdict-no' : 'verdict-maybe'}">${escapeHtml(a.verdict || 'MAYBE')}</span>
+            <div><select class="tracker-select" id="status-${proposal.id}" onchange="toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
+          </div>
+          <div class="record-fields">
+            <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
+            <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
+            <div class="record-field"><label>Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date or timeline" onblur="saveProposal(${proposal.id})"></div>
+            <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
+          </div>
+          <details class="record-details"><summary>Notes, payment & documents</summary><div class="proposal-detail-grid">
           <div><div class="field-label"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
           <div class="agreement-panel" id="agreement-${proposal.id}" style="display:${agreed ? 'block' : 'none'}">
             <div class="field-label"><i class="ti ti-file-dollar"></i> Agreement & payment</div>
@@ -943,7 +947,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
               <label>Patty's commission</label><textarea class="proposal-notes" id="commission-${proposal.id}" placeholder="Amount, percentage, payment timing, or calculation..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.commission_breakdown || '')}</textarea>
             </div>
           </div>
-        </div></td></tr>`;
+        </div></details></article>`;
       }).join('');
     }
 
