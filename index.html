@@ -403,6 +403,14 @@
     .about-details > summary::before { content: '+ '; }
     .about-details[open] > summary::before { content: '− '; }
     .original-proposal { margin-top: 10px; display: grid; gap: 10px; }
+    .assessment-detail { border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); overflow: hidden; }
+    .detail-section { padding: 12px 14px; border-bottom: .5px solid var(--border); }
+    .detail-section:last-child { border-bottom: 0; }
+    .detail-heading { color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin-bottom: 6px; }
+    .detail-text { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+    .detail-facts { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 12px; line-height: 1.5; }
+    .detail-facts strong { color: var(--text-secondary); }
+    .original-heading { margin-top: 4px; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
     .original-text { white-space: pre-wrap; padding: 10px 12px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-secondary); font-size: 12px; line-height: 1.55; max-height: 260px; overflow: auto; }
     .source-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
     .source-gallery button { padding: 0; border: .5px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); cursor: zoom-in; }
@@ -964,7 +972,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             <div class="record-field status-wrap"><label>Status</label><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
             <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
           </div>
-          <details class="record-details about-details"><summary>View original proposal</summary>${renderOriginalProposal(proposal)}</details>
+          <details class="record-details about-details"><summary>View full proposal</summary>${renderProposalDetails(proposal)}</details>
           <div class="record-editor" id="editor-${proposal.id}">
           <div class="record-fields">
             <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
@@ -988,20 +996,52 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       loadSourcePreviews();
     }
 
-    function renderOriginalProposal(proposal) {
+    function renderProposalDetails(proposal) {
+      const a = proposal.assessment || {};
       const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
       const text = cleanSourceText(proposal.source_text);
-      if (!sourceFiles.length && !text) return '<div class="original-proposal"><div class="original-text">Original screenshots or pasted text were not stored for this historical record.</div></div>';
+      const original = sourceFiles.length || text
+        ? `${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}${text ? `<div class="original-text">${escapeHtml(text)}</div>` : ''}`
+        : '<div class="original-text">Original screenshots or pasted text were not stored for this historical record. Add them with the pencil button.</div>';
       return `<div class="original-proposal">
-        ${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}
-        ${text ? `<div class="original-text">${escapeHtml(text)}</div>` : ''}
+        <div class="assessment-detail">
+          <div class="detail-section"><div class="detail-heading">Summary</div><div class="detail-text">${escapeHtml(a.proposal_summary || 'Not stated')}</div></div>
+          <div class="detail-section"><div class="detail-facts">
+            <strong>Requester</strong><span>${escapeHtml(a.requester_name || 'Not stated')}</span>
+            <strong>Requester Context</strong><span>${escapeHtml(a.requester_context || 'Not verified')}</span>
+            <strong>Timeline</strong><span>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</span>
+            <strong>Budget</strong><span>${escapeHtml(a.budget || 'Not stated')}</span>
+            <strong>Website/Social Links</strong><span>${linkifyText(a.social_links || 'Not stated')}</span>
+          </div></div>
+          <div class="detail-section"><div class="detail-heading">Opportunity Type</div><div class="detail-text">${escapeHtml(a.opportunity_type || 'Other')}</div></div>
+          <div class="detail-section"><div class="detail-heading">Ask</div><div class="detail-text">${escapeHtml(a.ask || 'Not stated')}</div></div>
+          <div class="detail-section"><div class="detail-heading">Next Step</div><div class="detail-text">${escapeHtml(a.next_step || 'Not stated')}</div></div>
+          <div class="detail-section"><div class="detail-heading">Reason</div><div class="detail-text">${escapeHtml(a.decision_reason || a.one_line_take || 'Not stated')}</div></div>
+        </div>
+        <div class="original-heading">Original submission</div>
+        ${original}
       </div>`;
+    }
+
+    function linkifyText(value) {
+      const text = String(value || '');
+      const urlPattern = /https?:\/\/[^\s,]+/g;
+      let output = '';
+      let lastIndex = 0;
+      for (const match of text.matchAll(urlPattern)) {
+        output += escapeHtml(text.slice(lastIndex, match.index));
+        const url = match[0];
+        output += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`;
+        lastIndex = match.index + url.length;
+      }
+      return output + escapeHtml(text.slice(lastIndex));
     }
 
     function cleanSourceText(value) {
       let text = String(value || '').trim();
       const marker = 'Additional text:\n';
       if (text.includes(marker)) text = text.split(marker).slice(1).join(marker).trim();
+      if (/^Scout this opportunity for Nuseir\./i.test(text)) text = '';
       if (/^Imported historical Scout assessment\.?$/i.test(text)) text = '';
       return text;
     }
