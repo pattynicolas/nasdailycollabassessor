@@ -13,7 +13,9 @@ const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } }) : null;
 
-const proposalStatuses = ['New', 'Reviewing', 'Needs Info', 'Approved', 'Rejected', 'Sent to Nuseir', 'Completed'];
+const proposalStatuses = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
+const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
+const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
 
 async function initializeDatabase() {
   if (!pool) return;
@@ -22,13 +24,36 @@ async function initializeDatabase() {
       id BIGSERIAL PRIMARY KEY,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      status TEXT NOT NULL DEFAULT 'New',
+      status TEXT NOT NULL DEFAULT 'Pending Details',
       notes TEXT NOT NULL DEFAULT '',
       source_text TEXT NOT NULL DEFAULT '',
       assessment JSONB NOT NULL
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS scout_proposals_created_at_idx ON scout_proposals (created_at DESC)');
+  await pool.query(`ALTER TABLE scout_proposals
+    ADD COLUMN IF NOT EXISTS event_date TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'Pending',
+    ADD COLUMN IF NOT EXISTS commission_breakdown TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'Pending Details'`);
+  await pool.query(`UPDATE scout_proposals SET status = CASE
+    WHEN status IN ('New', 'Reviewing', 'Needs Info') THEN 'Pending Details'
+    WHEN status IN ('Approved', 'Sent to Nuseir') THEN 'Agreed; Pending Contract'
+    WHEN status = 'Completed' THEN 'Delivered'
+    ELSE status END`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scout_proposal_files (
+      id BIGSERIAL PRIMARY KEY,
+      proposal_id BIGINT NOT NULL REFERENCES scout_proposals(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      file_data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 const databaseReady = initializeDatabase().catch(error => {
@@ -52,7 +77,7 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-proposal-database-1',
+    version: 'scout-deal-tracker-1',
     updated: '2026-06-23',
     database: Boolean(pool)
   });
@@ -75,7 +100,10 @@ app.get('/api/proposals', requireAdmin, async (req, res) => {
       conditions.push(`(assessment::text ILIKE $${values.length} OR notes ILIKE $${values.length} OR source_text ILIKE $${values.length})`);
     }
     const result = await pool.query(
-      `SELECT id, created_at, updated_at, status, notes, assessment FROM scout_proposals ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT 500`,
+      `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location,
+        p.payment_status, p.commission_breakdown, p.assessment,
+        COALESCE((SELECT json_agg(json_build_object('id', f.id, 'kind', f.kind, 'file_name', f.file_name, 'mime_type', f.mime_type, 'file_size', f.file_size)) FROM scout_proposal_files f WHERE f.proposal_id = p.id), '[]'::json) AS attachments
+       FROM scout_proposals p ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY p.created_at DESC LIMIT 500`,
       values
     );
     res.json({ proposals: result.rows, statuses: proposalStatuses });
@@ -90,17 +118,68 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
     const status = String(req.body?.status || '').trim();
     const notes = String(req.body?.notes ?? '');
+    const type = String(req.body?.type || 'Other').trim();
+    const budget = String(req.body?.budget || '').trim();
+    const eventDate = String(req.body?.eventDate || '').trim();
+    const location = String(req.body?.location || '').trim();
+    const paymentStatus = String(req.body?.paymentStatus || 'Pending').trim();
+    const commissionBreakdown = String(req.body?.commissionBreakdown || '');
     if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
     if (!proposalStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+    if (!opportunityTypes.includes(type)) return res.status(400).json({ error: 'Invalid opportunity type.' });
+    if (!paymentStatuses.includes(paymentStatus)) return res.status(400).json({ error: 'Invalid payment status.' });
     const result = await pool.query(
-      'UPDATE scout_proposals SET status = $1, notes = $2, updated_at = NOW() WHERE id = $3 RETURNING id, created_at, updated_at, status, notes, assessment',
-      [status, notes.slice(0, 10000), id]
+      `UPDATE scout_proposals SET status = $1, notes = $2, event_date = $3, location = $4,
+       payment_status = $5, commission_breakdown = $6,
+       assessment = assessment || jsonb_build_object('opportunity_type', $7::text, 'budget', $8::text), updated_at = NOW()
+       WHERE id = $9 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, assessment`,
+      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), type, budget.slice(0, 500), id]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
     res.json({ proposal: result.rows[0] });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Could not update proposal.' });
   }
+});
+
+app.post('/api/proposals/:id/files', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const proposalId = Number(req.params.id);
+    const kind = String(req.body?.kind || '').toLowerCase();
+    const fileName = String(req.body?.fileName || '').trim();
+    const mimeType = String(req.body?.mimeType || 'application/octet-stream').trim();
+    const base64 = String(req.body?.data || '');
+    if (!Number.isSafeInteger(proposalId) || proposalId < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
+    if (!['contract', 'invoice'].includes(kind)) return res.status(400).json({ error: 'Invalid attachment type.' });
+    if (!fileName || !base64) return res.status(400).json({ error: 'Missing attachment.' });
+    const data = Buffer.from(base64, 'base64');
+    if (!data.length || data.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Attachments must be 10 MB or smaller.' });
+    const result = await pool.query(
+      `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, kind, file_name, mime_type, file_size`,
+      [proposalId, kind, fileName.slice(0, 300), mimeType.slice(0, 150), data.length, data]
+    );
+    res.json({ attachment: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not upload attachment.' });
+  }
+});
+
+app.get('/api/proposals/files/:fileId', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  const result = await pool.query('SELECT file_name, mime_type, file_data FROM scout_proposal_files WHERE id = $1', [Number(req.params.fileId)]);
+  if (!result.rowCount) return res.status(404).json({ error: 'Attachment not found.' });
+  const file = result.rows[0];
+  res.setHeader('Content-Type', file.mime_type);
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.file_name)}`);
+  res.send(file.file_data);
+});
+
+app.delete('/api/proposals/files/:fileId', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  await pool.query('DELETE FROM scout_proposal_files WHERE id = $1', [Number(req.params.fileId)]);
+  res.json({ deleted: true });
 });
 
 app.post('/api/proposals/import', requireAdmin, async (req, res) => {
@@ -127,7 +206,9 @@ app.post('/api/proposals/import', requireAdmin, async (req, res) => {
         skipped += 1;
         continue;
       }
-      const status = proposalStatuses.includes(item?.status) ? item.status : 'New';
+      const legacyStatusMap = { New: 'Pending Details', Reviewing: 'Pending Details', 'Needs Info': 'Pending Details', Approved: 'Agreed; Pending Contract', 'Sent to Nuseir': 'Agreed; Pending Contract', Completed: 'Delivered' };
+      const requestedStatus = legacyStatusMap[item?.status] || item?.status;
+      const status = proposalStatuses.includes(requestedStatus) ? requestedStatus : 'Pending Details';
       const notes = String(item?.notes || '').slice(0, 10000);
       await pool.query(
         'INSERT INTO scout_proposals (assessment, source_text, status, notes) VALUES ($1::jsonb, $2, $3, $4)',
@@ -144,11 +225,11 @@ app.post('/api/proposals/import', requireAdmin, async (req, res) => {
 app.get('/api/proposals.csv', requireAdmin, async (_req, res) => {
   if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
   try {
-    const result = await pool.query('SELECT id, created_at, updated_at, status, notes, assessment FROM scout_proposals ORDER BY created_at DESC');
-    const headers = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
+    const result = await pool.query(`SELECT p.*, COALESCE((SELECT string_agg(f.file_name, '; ') FROM scout_proposal_files f WHERE f.proposal_id = p.id AND f.kind = 'contract'), '') AS contracts, COALESCE((SELECT string_agg(f.file_name, '; ') FROM scout_proposal_files f WHERE f.proposal_id = p.id AND f.kind = 'invoice'), '') AS invoices FROM scout_proposals p ORDER BY created_at DESC`);
+    const headers = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Date', 'Location', 'Payment Status', 'Contract/Agreement', 'Invoice', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
     const rows = result.rows.map(row => {
       const a = row.assessment || {};
-      return [row.id, row.created_at?.toISOString?.() || row.created_at, row.updated_at?.toISOString?.() || row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes];
+      return [row.id, row.created_at?.toISOString?.() || row.created_at, row.updated_at?.toISOString?.() || row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.contracts, row.invoices, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes];
     });
     const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
