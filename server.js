@@ -377,9 +377,13 @@ app.post('/api/assess', async (req, res) => {
   }
 
   try {
-    const { system, content } = req.body || {};
+    const { system, content, updateProposalId } = req.body || {};
     if (!system || !Array.isArray(content)) {
       return res.status(400).json({ error: 'Missing assessment content.' });
+    }
+    const existingProposalId = Number(updateProposalId || 0);
+    if (existingProposalId && !isAuthorizedAdmin(req)) {
+      return res.status(403).json({ error: 'Not authorized. Updating existing proposals is restricted to Patty.' });
     }
 
     const inputContent = content.map(item => {
@@ -439,6 +443,7 @@ app.post('/api/assess', async (req, res) => {
                 requester_name: { type: 'string' },
                 requester_context: { type: 'string' },
                 timeline: { type: 'string' },
+                location: { type: 'string' },
                 budget: { type: 'string' },
                 social_links: { type: 'string' },
                 type_score_label: { type: 'string' },
@@ -468,6 +473,7 @@ app.post('/api/assess', async (req, res) => {
                 'requester_name',
                 'requester_context',
                 'timeline',
+                'location',
                 'budget',
                 'social_links',
                 'type_score_label',
@@ -516,10 +522,27 @@ app.post('/api/assess', async (req, res) => {
         const rawSourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n');
         const additionalMarker = 'Additional text:\n';
         const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : '').slice(0, 50000);
-        const saved = await pool.query(
-          'INSERT INTO scout_proposals (assessment, source_text) VALUES ($1::jsonb, $2) RETURNING id, created_at, status',
-          [JSON.stringify(assessment), sourceText]
-        );
+        let saved;
+        if (existingProposalId) {
+          const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
+          if (!current.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
+          const prior = current.rows[0];
+          const mergedSource = [prior.source_text, sourceText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
+          const proposedDate = String(assessment.timeline || '').trim();
+          const proposedLocation = String(assessment.location || '').trim();
+          const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
+          const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
+          saved = await pool.query(
+            `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
+             WHERE id = $5 RETURNING id, created_at, status`,
+            [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
+          );
+        } else {
+          saved = await pool.query(
+            'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
+            [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
+          );
+        }
         let screenshotIndex = 0;
         for (const item of content.filter(item => item.type === 'image' && item.source?.data)) {
           const imageData = Buffer.from(item.source.data, 'base64');
@@ -530,7 +553,7 @@ app.post('/api/assess', async (req, res) => {
           await pool.query(
             `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
              VALUES ($1, 'source', $2, $3, $4, $5)`,
-            [saved.rows[0].id, `proposal-screenshot-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
+            [saved.rows[0].id, `${existingProposalId ? 'proposal-update' : 'proposal-screenshot'}-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
           );
         }
         assessment.proposal_record = saved.rows[0];
