@@ -1094,12 +1094,10 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     function compareProposalDates(a, b) {
       const dateA = parseEngagementDate(a.event_date || a.assessment?.timeline);
       const dateB = parseEngagementDate(b.event_date || b.assessment?.timeline);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const category = date => date === Number.MAX_SAFE_INTEGER ? 2 : date >= today.getTime() ? 0 : 1;
-      const categoryA = category(dateA);
-      const categoryB = category(dateB);
-      if (categoryA !== categoryB) return categoryA - categoryB;
-      if (dateA !== dateB) return categoryA === 1 ? dateB - dateA : dateA - dateB;
+      const unknownA = dateA === Number.MAX_SAFE_INTEGER;
+      const unknownB = dateB === Number.MAX_SAFE_INTEGER;
+      if (unknownA !== unknownB) return unknownA ? -1 : 1;
+      if (dateA !== dateB) return dateA - dateB;
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     }
 
