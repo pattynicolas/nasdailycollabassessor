@@ -521,6 +521,7 @@
     let proposalDatabaseOpen = false;
     let proposalLoadTimer = null;
     let sourcePreviewUrls = [];
+    let loadedProposals = new Map();
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -719,6 +720,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
   "requester_name": "name of person who reached out, otherwise Not stated",
   "requester_context": "short credibility context with LinkedIn/profile if found, otherwise Not verified",
   "timeline": "dates or timeline if stated, otherwise Not stated",
+  "location": "event or opportunity location if stated, otherwise Not stated",
   "budget": "budget, fee, paid/pro-bono status if stated, otherwise Not stated",
   "social_links": "website/social links if found or stated, otherwise Not stated",
   "type_score_label": "Story Potential OR Worth Nuseir's Time OR Partnership Potential OR Mission Impact OR Media Value OR Opportunity Value",
@@ -952,6 +954,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function renderProposalRows(proposals) {
       const rows = document.getElementById('proposal-rows');
+      loadedProposals = new Map(proposals.map(proposal => [Number(proposal.id), proposal]));
       if (!proposals.length) {
         rows.innerHTML = '<div class="empty-state">No proposals match this view.</div>';
         return;
@@ -979,11 +982,11 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           <div class="record-fields">
             <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
             <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
-            <div class="record-field"><label>Engagement Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onblur="saveProposal(${proposal.id})"></div>
+            <div class="record-field"><label>Engagement Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onchange="saveProposal(${proposal.id}, true)"></div>
             <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
           </div>
           <hr class="editor-divider"><div class="proposal-detail-grid">
-          <div><div class="field-label"><i class="ti ti-file-description"></i> Original proposal</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
+          <div><div class="field-label"><i class="ti ti-sparkles"></i> Update with Scout</div><textarea class="proposal-notes" id="update-text-${proposal.id}" placeholder="Paste the new email, WhatsApp message, fee, date, or other update..."></textarea><div class="attachment-row"><input type="file" id="update-files-${proposal.id}" accept="image/*" multiple><button class="copy-btn" type="button" onclick="processProposalUpdate(${proposal.id}, event)"><i class="ti ti-sparkles"></i> Read & update fields</button></div><div class="field-label" style="margin-top:18px"><i class="ti ti-file-description"></i> Original proposal & update history</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
           <div class="agreement-panel" id="agreement-${proposal.id}" style="display:${agreed ? 'block' : 'none'}">
             <div class="field-label"><i class="ti ti-file-dollar"></i> Agreement & payment</div>
             <div class="agreement-grid">
@@ -1121,7 +1124,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
     }
 
-    async function saveProposal(id) {
+    async function saveProposal(id, resortAfterSave = false) {
       const state = document.getElementById(`save-${id}`);
       state.textContent = 'Saving...';
       try {
@@ -1143,9 +1146,54 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Could not save.');
         state.textContent = 'Saved';
+        if (resortAfterSave) {
+          await loadProposals(false);
+          return;
+        }
         setTimeout(() => { state.textContent = ''; }, 1400);
       } catch (error) {
         state.textContent = error.message;
+      }
+    }
+
+    async function processProposalUpdate(id, event) {
+      const proposal = loadedProposals.get(Number(id));
+      const updateText = document.getElementById(`update-text-${id}`).value.trim();
+      const files = Array.from(document.getElementById(`update-files-${id}`).files || []);
+      if (!proposal || (!updateText && !files.length)) return alert('Paste an update or attach at least one screenshot.');
+      const button = event?.currentTarget;
+      const original = button?.innerHTML;
+      if (button) { button.disabled = true; button.innerHTML = '<span class="spinner"></span> Reading update...'; }
+      try {
+        const content = [];
+        for (const file of files) {
+          if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name} is larger than 10 MB.`);
+          content.push({ type: 'image', source: { type: 'base64', media_type: file.type || 'image/png', data: await fileToBase64(file) } });
+        }
+        const currentRecord = {
+          assessment: proposal.assessment || {},
+          status: proposal.status,
+          engagement_date: proposal.event_date,
+          location: proposal.location,
+          notes: proposal.notes
+        };
+        content.push({
+          type: 'text',
+          text: `Update this existing Scout proposal. Merge the new information with the existing record. Preserve existing facts unless the update explicitly replaces or corrects them. Reassess the recommendation only when the new information materially changes it. Extract any new date, location, budget, requester information, links, ask, or next step. Never create a different proposal.\n\nExisting record:\n${JSON.stringify(currentRecord)}\n\nAdditional text:\n${updateText || 'The update is contained in the attached screenshot(s).'}`
+        });
+        const system = `You are Scout, Patty's opportunity scout for Nuseir Yassin. Update an existing opportunity assessment using new messages or screenshots. Return a complete merged assessment, not only changed fields. Keep the same proposal identity. Use professional executive English. Evaluate Reach, Relevance, Potential Business, Requester Credibility, Time Cost, and the type-specific opportunity score. Preserve verified facts unless contradicted. Use Not stated only when neither the existing record nor the update provides the fact. The location field must contain the event/opportunity location or Not stated. Be conservative with Nuseir's time and return only the required JSON.`;
+        const response = await fetch('/api/assess', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify({ system, content, updateProposalId: id })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Scout could not process this update.');
+        await loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Scout could not process this update.');
+      } finally {
+        if (button) { button.disabled = false; button.innerHTML = original; }
       }
     }
 
