@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import pg from 'pg';
 import { fileURLToPath } from 'node:url';
 
 const app = express();
@@ -8,6 +9,84 @@ const port = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const larkUserSessions = new Map();
+const { Pool } = pg;
+const databaseUrl = process.env.DATABASE_URL?.trim();
+const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } }) : null;
+
+const proposalStatuses = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
+const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
+const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
+const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
+
+function proposalSheetRow(row) {
+  const a = row.assessment || {};
+  return [row.id, row.created_at, row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes].map(value => value ?? '');
+}
+
+async function syncGoogleSheet() {
+  const webhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL?.trim();
+  const webhookSecret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET?.trim();
+  if (!webhookUrl || !webhookSecret || !pool) return { configured: false };
+  const result = await pool.query('SELECT * FROM scout_proposals ORDER BY id');
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: webhookSecret, sheet: 'Proposals', headers: sheetHeaders, rows: result.rows.map(proposalSheetRow), synced_at: new Date().toISOString() })
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Google Sheet backup failed (${response.status}).`);
+  let payload;
+  try { payload = JSON.parse(text); } catch { payload = { ok: true }; }
+  if (payload?.ok === false) throw new Error(payload.error || 'Google Sheet backup was rejected.');
+  return { configured: true, rows: result.rowCount, ...payload };
+}
+
+function syncGoogleSheetSoon() {
+  setTimeout(() => syncGoogleSheet().catch(error => console.error('Google Sheet backup failed:', error.message)), 0);
+}
+
+async function initializeDatabase() {
+  if (!pool) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scout_proposals (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status TEXT NOT NULL DEFAULT 'Pending Details',
+      notes TEXT NOT NULL DEFAULT '',
+      source_text TEXT NOT NULL DEFAULT '',
+      assessment JSONB NOT NULL
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS scout_proposals_created_at_idx ON scout_proposals (created_at DESC)');
+  await pool.query(`ALTER TABLE scout_proposals
+    ADD COLUMN IF NOT EXISTS event_date TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'Pending',
+    ADD COLUMN IF NOT EXISTS commission_breakdown TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'Pending Details'`);
+  await pool.query(`UPDATE scout_proposals SET status = CASE
+    WHEN status IN ('New', 'Reviewing', 'Needs Info') THEN 'Pending Details'
+    WHEN status IN ('Approved', 'Sent to Nuseir') THEN 'Agreed; Pending Contract'
+    WHEN status = 'Completed' THEN 'Delivered'
+    ELSE status END`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scout_proposal_files (
+      id BIGSERIAL PRIMARY KEY,
+      proposal_id BIGINT NOT NULL REFERENCES scout_proposals(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      file_data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+const databaseReady = initializeDatabase().catch(error => {
+  console.error('Scout database initialization failed:', error.message);
+});
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
@@ -26,9 +105,210 @@ app.use((error, _req, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({
-    version: 'scout-short-lark-card-1',
-    updated: '2026-06-12'
+    version: 'scout-deal-tracker-1',
+    updated: '2026-06-23',
+    database: Boolean(pool)
   });
+});
+
+app.get('/api/proposals', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected. Add DATABASE_URL in Render.' });
+  try {
+    await databaseReady;
+    const search = String(req.query.search || '').trim();
+    const status = String(req.query.status || '').trim();
+    const values = [];
+    const conditions = [];
+    if (status && status !== 'All') {
+      values.push(status);
+      conditions.push(`status = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(`(assessment::text ILIKE $${values.length} OR notes ILIKE $${values.length} OR source_text ILIKE $${values.length})`);
+    }
+    const result = await pool.query(
+      `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location, p.source_text,
+        p.payment_status, p.commission_breakdown, p.assessment,
+        COALESCE((SELECT json_agg(json_build_object('id', f.id, 'kind', f.kind, 'file_name', f.file_name, 'mime_type', f.mime_type, 'file_size', f.file_size)) FROM scout_proposal_files f WHERE f.proposal_id = p.id), '[]'::json) AS attachments
+       FROM scout_proposals p ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY p.created_at DESC LIMIT 500`,
+      values
+    );
+    res.json({ proposals: result.rows, statuses: proposalStatuses });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not load proposals.' });
+  }
+});
+
+app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const id = Number(req.params.id);
+    const status = String(req.body?.status || '').trim();
+    const notes = String(req.body?.notes ?? '');
+    const type = String(req.body?.type || 'Other').trim();
+    const budget = String(req.body?.budget || '').trim();
+    const eventDate = String(req.body?.eventDate || '').trim();
+    const location = String(req.body?.location || '').trim();
+    const paymentStatus = String(req.body?.paymentStatus || 'Pending').trim();
+    const commissionBreakdown = String(req.body?.commissionBreakdown || '');
+    const sourceText = String(req.body?.sourceText || '');
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
+    if (!proposalStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+    if (!opportunityTypes.includes(type)) return res.status(400).json({ error: 'Invalid opportunity type.' });
+    if (!paymentStatuses.includes(paymentStatus)) return res.status(400).json({ error: 'Invalid payment status.' });
+    const result = await pool.query(
+      `UPDATE scout_proposals SET status = $1, notes = $2, event_date = $3, location = $4,
+       payment_status = $5, commission_breakdown = $6,
+       source_text = $7, assessment = assessment || jsonb_build_object('opportunity_type', $8::text, 'budget', $9::text), updated_at = NOW()
+       WHERE id = $10 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, source_text, assessment`,
+      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), sourceText.slice(0, 50000), type, budget.slice(0, 500), id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
+    syncGoogleSheetSoon();
+    res.json({ proposal: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not update proposal.' });
+  }
+});
+
+app.post('/api/proposals/:id/files', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const proposalId = Number(req.params.id);
+    const kind = String(req.body?.kind || '').toLowerCase();
+    const fileName = String(req.body?.fileName || '').trim();
+    const mimeType = String(req.body?.mimeType || 'application/octet-stream').trim();
+    const base64 = String(req.body?.data || '');
+    if (!Number.isSafeInteger(proposalId) || proposalId < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
+    if (!['contract', 'invoice', 'source'].includes(kind)) return res.status(400).json({ error: 'Invalid attachment type.' });
+    if (!fileName || !base64) return res.status(400).json({ error: 'Missing attachment.' });
+    const data = Buffer.from(base64, 'base64');
+    if (!data.length || data.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Attachments must be 10 MB or smaller.' });
+    const result = await pool.query(
+      `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, kind, file_name, mime_type, file_size`,
+      [proposalId, kind, fileName.slice(0, 300), mimeType.slice(0, 150), data.length, data]
+    );
+    res.json({ attachment: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not upload attachment.' });
+  }
+});
+
+app.get('/api/proposals/files/:fileId', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  const result = await pool.query('SELECT file_name, mime_type, file_data FROM scout_proposal_files WHERE id = $1', [Number(req.params.fileId)]);
+  if (!result.rowCount) return res.status(404).json({ error: 'Attachment not found.' });
+  const file = result.rows[0];
+  res.setHeader('Content-Type', file.mime_type);
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.file_name)}`);
+  res.send(file.file_data);
+});
+
+app.delete('/api/proposals/files/:fileId', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  await pool.query('DELETE FROM scout_proposal_files WHERE id = $1', [Number(req.params.fileId)]);
+  res.json({ deleted: true });
+});
+
+app.post('/api/proposals/import', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const proposals = Array.isArray(req.body?.proposals) ? req.body.proposals : [];
+    if (!proposals.length || proposals.length > 200) {
+      return res.status(400).json({ error: 'Import must contain between 1 and 200 proposals.' });
+    }
+    let imported = 0;
+    let skipped = 0;
+    for (const item of proposals) {
+      const assessment = item?.assessment || item;
+      const proposalName = String(assessment?.proposal_name || '').trim();
+      if (!proposalName) {
+        skipped += 1;
+        continue;
+      }
+      const duplicate = await pool.query(
+        `SELECT 1 FROM scout_proposals WHERE LOWER(assessment->>'proposal_name') = LOWER($1) LIMIT 1`,
+        [proposalName]
+      );
+      if (duplicate.rowCount) {
+        skipped += 1;
+        continue;
+      }
+      const legacyStatusMap = { New: 'Pending Details', Reviewing: 'Pending Details', 'Needs Info': 'Pending Details', Approved: 'Agreed; Pending Contract', 'Sent to Nuseir': 'Agreed; Pending Contract', Completed: 'Delivered' };
+      const requestedStatus = legacyStatusMap[item?.status] || item?.status;
+      const status = proposalStatuses.includes(requestedStatus) ? requestedStatus : 'Pending Details';
+      const notes = String(item?.notes || '').slice(0, 10000);
+      await pool.query(
+        'INSERT INTO scout_proposals (assessment, source_text, status, notes) VALUES ($1::jsonb, $2, $3, $4)',
+        [JSON.stringify(assessment), String(item?.source_text || 'Imported historical Scout assessment').slice(0, 50000), status, notes]
+      );
+      imported += 1;
+    }
+    if (imported) syncGoogleSheetSoon();
+    res.json({ imported, skipped });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not import proposals.' });
+  }
+});
+
+app.get('/api/proposals.csv', requireAdmin, async (_req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const result = await pool.query(`SELECT p.*, COALESCE((SELECT string_agg(f.file_name, '; ') FROM scout_proposal_files f WHERE f.proposal_id = p.id AND f.kind = 'contract'), '') AS contracts, COALESCE((SELECT string_agg(f.file_name, '; ') FROM scout_proposal_files f WHERE f.proposal_id = p.id AND f.kind = 'invoice'), '') AS invoices FROM scout_proposals p ORDER BY created_at DESC`);
+    const headers = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Date', 'Location', 'Payment Status', 'Contract/Agreement', 'Invoice', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
+    const rows = result.rows.map(row => {
+      const a = row.assessment || {};
+      return [row.id, row.created_at?.toISOString?.() || row.created_at, row.updated_at?.toISOString?.() || row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.contracts, row.invoices, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes];
+    });
+    const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="scout-proposals-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not export proposals.' });
+  }
+});
+
+app.get('/api/proposals.backup.json', requireAdmin, async (_req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    await databaseReady;
+    const proposals = await pool.query('SELECT * FROM scout_proposals ORDER BY id');
+    const files = await pool.query(`
+      SELECT id, proposal_id, kind, file_name, mime_type, file_size, created_at,
+        encode(file_data, 'base64') AS file_data_base64
+      FROM scout_proposal_files ORDER BY id
+    `);
+    const backup = {
+      format: 'scout-proposals-backup',
+      version: 1,
+      exported_at: new Date().toISOString(),
+      proposal_count: proposals.rowCount,
+      attachment_count: files.rowCount,
+      proposals: proposals.rows,
+      attachments: files.rows
+    };
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="scout-full-backup-${date}.json"`);
+    res.send(JSON.stringify(backup));
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not create full backup.' });
+  }
+});
+
+app.post('/api/proposals/sync-google-sheet', requireAdmin, async (_req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    await databaseReady;
+    const result = await syncGoogleSheet();
+    if (!result.configured) return res.status(503).json({ error: 'Google Sheet backup is not configured in Render yet.' });
+    res.json(result);
+  } catch (error) {
+    res.status(502).json({ error: error.message || 'Could not sync the Google Sheet backup.' });
+  }
 });
 
 app.get('/api/lark/oauth/start', (req, res) => {
@@ -97,9 +377,13 @@ app.post('/api/assess', async (req, res) => {
   }
 
   try {
-    const { system, content } = req.body || {};
+    const { system, content, updateProposalId } = req.body || {};
     if (!system || !Array.isArray(content)) {
       return res.status(400).json({ error: 'Missing assessment content.' });
+    }
+    const existingProposalId = Number(updateProposalId || 0);
+    if (existingProposalId && !isAuthorizedAdmin(req)) {
+      return res.status(403).json({ error: 'Not authorized. Updating existing proposals is restricted to Patty.' });
     }
 
     const inputContent = content.map(item => {
@@ -156,7 +440,10 @@ app.post('/api/assess', async (req, res) => {
                 one_line_take: { type: 'string' },
                 decision_reason: { type: 'string' },
                 proposal_summary: { type: 'string' },
+                requester_name: { type: 'string' },
+                requester_context: { type: 'string' },
                 timeline: { type: 'string' },
+                location: { type: 'string' },
                 budget: { type: 'string' },
                 social_links: { type: 'string' },
                 type_score_label: { type: 'string' },
@@ -168,6 +455,8 @@ app.post('/api/assess', async (req, res) => {
                 relevance_reason: { type: 'string' },
                 business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
                 business_reason: { type: 'string' },
+                credibility_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+                credibility_reason: { type: 'string' },
                 time_cost_score: { type: 'string', enum: ['WORTH IT', 'BORDERLINE', 'NOT WORTH IT'] },
                 time_cost_reason: { type: 'string' },
                 ask: { type: 'string' },
@@ -181,7 +470,10 @@ app.post('/api/assess', async (req, res) => {
                 'one_line_take',
                 'decision_reason',
                 'proposal_summary',
+                'requester_name',
+                'requester_context',
                 'timeline',
+                'location',
                 'budget',
                 'social_links',
                 'type_score_label',
@@ -193,6 +485,8 @@ app.post('/api/assess', async (req, res) => {
                 'relevance_reason',
                 'business_score',
                 'business_reason',
+                'credibility_score',
+                'credibility_reason',
                 'time_cost_score',
                 'time_cost_reason',
                 'ask',
@@ -221,7 +515,57 @@ app.post('/api/assess', async (req, res) => {
       return res.status(500).json({ error: 'OpenAI returned no assessment text.' });
     }
 
-    return res.status(200).json(JSON.parse(outputText));
+    const assessment = JSON.parse(outputText);
+    if (pool) {
+      try {
+        await databaseReady;
+        const rawSourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n');
+        const additionalMarker = 'Additional text:\n';
+        const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : '').slice(0, 50000);
+        let saved;
+        if (existingProposalId) {
+          const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
+          if (!current.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
+          const prior = current.rows[0];
+          const mergedSource = [prior.source_text, sourceText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
+          const proposedDate = String(assessment.timeline || '').trim();
+          const proposedLocation = String(assessment.location || '').trim();
+          const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
+          const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
+          saved = await pool.query(
+            `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
+             WHERE id = $5 RETURNING id, created_at, status`,
+            [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
+          );
+        } else {
+          saved = await pool.query(
+            'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
+            [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
+          );
+        }
+        let screenshotIndex = 0;
+        for (const item of content.filter(item => item.type === 'image' && item.source?.data)) {
+          const imageData = Buffer.from(item.source.data, 'base64');
+          if (!imageData.length || imageData.length > 10 * 1024 * 1024) continue;
+          screenshotIndex += 1;
+          const mimeType = String(item.source.media_type || 'image/jpeg');
+          const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+          await pool.query(
+            `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+             VALUES ($1, 'source', $2, $3, $4, $5)`,
+            [saved.rows[0].id, `${existingProposalId ? 'proposal-update' : 'proposal-screenshot'}-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
+          );
+        }
+        assessment.proposal_record = saved.rows[0];
+        syncGoogleSheetSoon();
+      } catch (databaseError) {
+        console.error('Assessment succeeded but database save failed:', databaseError.message);
+        assessment.database_warning = 'Assessment completed, but it was not saved to the proposal database.';
+      }
+    } else {
+      assessment.database_warning = 'Assessment completed, but DATABASE_URL is not configured.';
+    }
+    return res.status(200).json(assessment);
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Assessment failed.' });
   }
@@ -394,6 +738,18 @@ function isAuthorizedAdmin(req) {
   return typeof providedKey === 'string' && timingSafeEqual(providedKey.trim(), adminKey);
 }
 
+function requireAdmin(req, res, next) {
+  if (!isAuthorizedAdmin(req)) {
+    return res.status(403).json({ error: 'Not authorized. The proposal database is restricted to Patty.' });
+  }
+  next();
+}
+
+function csvCell(value) {
+  const text = value == null ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
 function timingSafeEqual(a, b) {
   const aBuffer = Buffer.from(a);
   const bBuffer = Buffer.from(b);
@@ -448,9 +804,10 @@ function buildScoutAssessmentCard(assessment, fallbackMessage) {
       }
     },
     elements: [
-      md(`**VERDICT**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
+      md(`**RECOMMENDATION**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
       { tag: 'hr' },
       md(`**SUMMARY**\n${summary}`),
+      md(`**Requester:** ${assessment.requester_name || 'Not stated'}\n**Requester Context:** ${assessment.requester_context || 'Not verified'}`),
       md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
       { tag: 'hr' },
       md(`**OPPORTUNITY TYPE**\n${formatOpportunityType(assessment.opportunity_type)}`),

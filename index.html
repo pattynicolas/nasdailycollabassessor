@@ -57,9 +57,11 @@
     }
 
     .container {
-      max-width: 640px;
+      max-width: 1120px;
       margin: 0 auto;
     }
+
+    .assessor-column { max-width: 640px; margin: 0 auto; }
 
     header {
       margin-bottom: 2rem;
@@ -349,10 +351,102 @@
       text-align: center;
       margin-top: 6px;
     }
+
+    .database-card { margin-top: 1.5rem; }
+    .database-header, .database-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .database-header h2 { font-size: 17px; font-weight: 600; }
+    .database-header p { color: var(--text-secondary); font-size: 13px; margin-top: 3px; }
+    .database-toolbar { margin: 1rem 0; justify-content: flex-start; }
+    .database-toolbar input, .database-toolbar select, .proposal-status {
+      border: 0.5px solid var(--border-mid);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      padding: 8px 10px;
+    }
+    .database-toolbar input { flex: 1; min-width: 190px; }
+    .proposal-list { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .proposal-record { padding: 16px; border-bottom: 0.5px solid var(--border); }
+    .proposal-record:last-child { border-bottom: none; }
+    .record-status-pending-details { background: color-mix(in srgb, var(--bg-warning) 32%, var(--bg)); border-left: 4px solid var(--text-warning); }
+    .record-status-agreed-pending-contract { background: color-mix(in srgb, var(--bg-info) 32%, var(--bg)); border-left: 4px solid var(--text-info); }
+    .record-status-rejected { background: color-mix(in srgb, var(--bg-danger) 28%, var(--bg)); border-left: 4px solid var(--text-danger); }
+    .record-status-contract-signed { background: color-mix(in srgb, var(--bg-info) 45%, var(--bg)); border-left: 4px solid var(--text-info); }
+    .record-status-delivered { background: color-mix(in srgb, var(--bg-success) 38%, var(--bg)); border-left: 4px solid var(--text-success); }
+    .record-head { display: grid; grid-template-columns: 140px minmax(280px, 1fr) minmax(190px, 230px) 40px; gap: 14px; align-items: center; }
+    .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; }
+    .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .proposal-title { font-size: 16px; font-weight: 650; margin-bottom: 5px; }
+    .proposal-meta { color: var(--text-secondary); font-size: 12px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .proposal-summary { color: var(--text-secondary); line-height: 1.55; margin-top: 7px; }
+    .date-card { min-height: 58px; display: flex; flex-direction: column; justify-content: center; padding: 8px 10px; border-radius: var(--radius); background: var(--bg-info); color: var(--text-info); }
+    .date-card strong { color: var(--text); font-size: 13px; line-height: 1.25; }
+    .date-card span { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+    .status-select { font-weight: 600; }
+    .status-pending-details { background: var(--bg-warning); color: var(--text-warning); }
+    .status-agreed-pending-contract, .status-contract-signed { background: var(--bg-info); color: var(--text-info); }
+    .status-rejected { background: var(--bg-danger); color: var(--text-danger); }
+    .status-delivered { background: var(--bg-success); color: var(--text-success); }
+    .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: .5px solid var(--border-mid); border-radius: var(--radius); background: var(--bg); color: var(--text); cursor: pointer; font-size: 17px; }
+    .icon-btn:hover { background: var(--bg-secondary); }
+    .about-details { margin-top: 10px; }
+    .about-details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; font-weight: 600; list-style: none; }
+    .about-details > summary::-webkit-details-marker { display: none; }
+    .about-details > summary::before { content: '+ '; }
+    .about-details[open] > summary::before { content: '− '; }
+    .original-proposal { margin-top: 10px; display: grid; gap: 10px; }
+    .assessment-detail { border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); overflow: hidden; }
+    .detail-section { padding: 12px 14px; border-bottom: .5px solid var(--border); }
+    .detail-section:last-child { border-bottom: 0; }
+    .detail-heading { color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin-bottom: 6px; }
+    .detail-text { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+    .detail-facts { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 12px; line-height: 1.5; }
+    .detail-facts strong { color: var(--text-secondary); }
+    .original-heading { margin-top: 4px; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+    .original-text { white-space: pre-wrap; padding: 10px 12px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-secondary); font-size: 12px; line-height: 1.55; max-height: 260px; overflow: auto; }
+    .source-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
+    .source-gallery button { padding: 0; border: .5px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); cursor: zoom-in; }
+    .source-gallery img { display: block; width: 100%; height: 150px; object-fit: cover; }
+    .proposal-notes { min-height: 66px; min-width: 220px; font-size: 13px; line-height: 1.4; }
+    .save-state { display: block; color: var(--text-secondary); font-size: 11px; margin-top: 4px; min-height: 15px; }
+    .empty-state { color: var(--text-secondary); text-align: center; padding: 2rem; font-size: 14px; }
+    .tracker-input, .tracker-select {
+      width: 100%; min-width: 130px; border: 0.5px solid var(--border-mid); border-radius: var(--radius);
+      background: var(--bg); color: var(--text); font: inherit; font-size: 12px; padding: 7px 8px;
+    }
+    .tracker-select.type-select { min-width: 190px; }
+    .record-details { margin: 10px 0 0 154px; }
+    .record-details > summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; font-weight: 600; list-style: none; }
+    .record-details > summary::-webkit-details-marker { display: none; }
+    .record-details > summary::before { content: '+ '; }
+    .record-details[open] > summary::before { content: '− '; }
+    .proposal-detail-grid { margin-top: 12px; }
+    .record-editor { display: none; margin: 14px 0 0 154px; padding: 14px; border-radius: var(--radius); background: var(--bg-secondary); }
+    .record-editor.open { display: block; }
+    .editor-divider { border: 0; border-top: .5px solid var(--border); margin: 14px 0; }
+    .proposal-detail-grid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.4fr); gap: 16px; }
+    .agreement-panel { border-left: 2px solid var(--border-mid); padding-left: 16px; }
+    .agreement-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: start; }
+    .attachment-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 5px; }
+    .attachment-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 11px; }
+    .attachment-chip button { border: 0; background: none; color: var(--text-danger); cursor: pointer; }
+    .status-guide { margin-top: 12px; border: .5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+    .status-guide summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+    .status-guide-grid { display: grid; grid-template-columns: 180px 1fr; gap: 7px 12px; margin-top: 10px; font-size: 12px; line-height: 1.45; }
+    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="assessor-column">
     <header>
       <h1><i class="ti ti-radar"></i> Scout</h1>
       <p>The opportunity scout for Nuseir: sharp-eyed, story-hungry, and allergic to wasted time.</p>
@@ -384,12 +478,50 @@
     </div>
 
     <div id="result-area" style="display:none;"></div>
+    </div>
+
+    <section class="card database-card">
+      <div class="database-header">
+        <div>
+          <h2><i class="ti ti-database"></i> Proposal Database</h2>
+          <p>Every Scout assessment, its current status, and your working notes.</p>
+        </div>
+        <button class="copy-btn" id="open-database-btn" onclick="loadProposals()"><i class="ti ti-lock-open"></i> Open database</button>
+      </div>
+      <div id="database-content" style="display:none;">
+        <details class="status-guide">
+          <summary><i class="ti ti-info-circle"></i> What each status means</summary>
+          <div class="status-guide-grid">
+            <strong>Pending Details</strong><span>We replied and need more information before approving or rejecting.</span>
+            <strong>Agreed; Pending Contract</strong><span>Nuseir said yes. We are waiting for the agreement to be finalized and signed.</span>
+            <strong>Rejected</strong><span>We declined the opportunity.</span>
+            <strong>Contract Signed</strong><span>The agreement is signed; delivery or the event is still pending.</span>
+            <strong>Delivered</strong><span>The collaboration, appearance, or event is complete.</span>
+          </div>
+        </details>
+        <div class="database-toolbar">
+          <input id="proposal-search" type="search" placeholder="Search brand, proposal, requester, or notes" oninput="scheduleProposalLoad()" />
+          <select id="proposal-filter" onchange="loadProposals(false)"><option>All</option></select>
+          <button class="copy-btn" onclick="downloadProposalCsv()"><i class="ti ti-download"></i> Download CSV</button>
+          <button class="copy-btn" onclick="downloadFullBackup()" title="Includes every proposal, screenshot, contract, and invoice"><i class="ti ti-database-export"></i> Full backup</button>
+          <button class="copy-btn" onclick="syncGoogleSheetBackup(event)" title="Refresh the Google Sheet backup"><i class="ti ti-brand-google-drive"></i> Sync Google Sheet</button>
+          <button class="copy-btn" onclick="document.getElementById('proposal-import-file').click()"><i class="ti ti-file-upload"></i> Import proposals</button>
+          <input id="proposal-import-file" type="file" accept="application/json,.json" style="display:none" onchange="importProposalFile(event)" />
+          <button class="copy-btn" onclick="loadProposals(false)"><i class="ti ti-refresh"></i> Refresh</button>
+        </div>
+        <div class="proposal-list" id="proposal-rows"><div class="empty-state">Loading proposals...</div></div>
+      </div>
+    </section>
   </div>
 
   <script>
     const images = [];
     let lastLarkMessage = '';
     let lastAssessment = null;
+    let proposalDatabaseOpen = false;
+    let proposalLoadTimer = null;
+    let sourcePreviewUrls = [];
+    let loadedProposals = new Map();
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -506,6 +638,13 @@ Then evaluate using universal criteria:
 2. Relevance: fit with Nas Daily content, education, storytelling, entrepreneurship, global optimism, creator economy, useful products, or world-scale ideas.
 3. Potential business: revenue, strategic access, sponsors, repeatability, partnership, or material upside.
 4. Time Cost: whether this justifies Nuseir's personal attention. Attention is often scarcer than money.
+5. Requester credibility: whether the person who reached out appears real, relevant, senior enough, and connected to the stated organization.
+
+Requester credibility rules:
+- Identify the person who reached out when possible.
+- Use web search when possible to find LinkedIn/profile/context for that person and confirm they are connected to the organization.
+- If you cannot verify the requester, say so plainly and reduce confidence.
+- Never invent a LinkedIn profile or credential. Use "Not verified" when evidence is missing.
 
 Classification-specific calibration:
 
@@ -513,8 +652,9 @@ For Collaboration / Content Opportunity:
 - Do not judge only by business value.
 - Ask: Is there a compelling Nas Daily story here?
 - Consider human story, educational value, surprising insights, global relevance, viral potential, and access to unique people/places/experiences.
+- Distinguish "could be interesting" from "there is a guaranteed Nas Daily story." If access, characters, filming angle, or global hook are unclear, do not over-score story potential.
 - For pro-bono opportunities, ask: Would Nas Daily want to create content about this even with no commercial benefit?
-- If yes, increase recommendation strength.
+- If yes, increase recommendation strength. If no direct business benefit and no guaranteed story, the recommendation should usually be NO.
 - Set type_score_label to "Story Potential".
 
 For Speaking Engagement:
@@ -551,6 +691,12 @@ Final decision philosophy, in order:
 
 Before issuing YES / MAYBE / NO, ask: Will future Nuseir be glad we spent time on this opportunity? Use that as the final calibration check.
 
+Default to NO when:
+- There is no guaranteed or clearly accessible Nas Daily story.
+- There is no direct business, revenue, partnership, or strategic benefit.
+- The requester is unverified or weakly connected to the organization.
+- The opportunity is merely nice, emotional, local, or interesting but does not justify Nuseir's time.
+
 Formatting discipline:
 - Always rewrite awkward inbound phrasing into clean professional English.
 - Do not copy phrases like "wants Invitation for Nuseir" or other malformed wording.
@@ -558,6 +704,7 @@ Formatting discipline:
 - proposal_name should be a short scan-friendly name, usually the brand/event/show/foundation name.
 - proposal_summary must be 1-2 complete sentences focused on what is being proposed.
 - decision_reason should be 1 complete sentence explaining the final verdict in plain executive language.
+- requester_context should be one short sentence naming who reached out, their apparent role, and whether their profile/LinkedIn/connection was verified.
 
 Use web search when possible to verify reach, credibility, and recent activity.
 
@@ -570,7 +717,10 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
   "one_line_take": "one short sentence with the simple reason",
   "decision_reason": "one complete sentence explaining the verdict",
   "proposal_summary": "1-2 polished complete sentences explaining the proposal; rewrite awkward grammar",
+  "requester_name": "name of person who reached out, otherwise Not stated",
+  "requester_context": "short credibility context with LinkedIn/profile if found, otherwise Not verified",
   "timeline": "dates or timeline if stated, otherwise Not stated",
+  "location": "event or opportunity location if stated, otherwise Not stated",
   "budget": "budget, fee, paid/pro-bono status if stated, otherwise Not stated",
   "social_links": "website/social links if found or stated, otherwise Not stated",
   "type_score_label": "Story Potential OR Worth Nuseir's Time OR Partnership Potential OR Mission Impact OR Media Value OR Opportunity Value",
@@ -582,6 +732,8 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
   "relevance_reason": "max 14 words",
   "business_score": "STRONG" or "MEDIUM" or "WEAK",
   "business_reason": "max 14 words",
+  "credibility_score": "STRONG" or "MEDIUM" or "WEAK",
+  "credibility_reason": "max 14 words about requester/org legitimacy",
   "time_cost_score": "WORTH IT" or "BORDERLINE" or "NOT WORTH IT",
   "time_cost_reason": "max 14 words explaining whether it justifies Nuseir's attention",
   "ask": "what they want from Nuseir in one short sentence",
@@ -592,7 +744,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
       images.forEach(img => {
         userContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } });
       });
-      let userText = 'Scout this opportunity for Nuseir. Classify it first, then evaluate Reach, Relevance, Potential Business, Time Cost, and the type-specific opportunity score.';
+      let userText = 'Scout this opportunity for Nuseir. Classify it first, then evaluate Reach, Relevance, Potential Business, Requester Credibility, Time Cost, and the type-specific opportunity score.';
       if (pitchText) userText += '\n\nAdditional text:\n' + pitchText;
       userContent.push({ type: 'text', text: userText });
 
@@ -615,6 +767,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
         }
         if (!response.ok) throw new Error(data.error || 'Assessment failed.');
         renderResult(data);
+        if (proposalDatabaseOpen) loadProposals(false);
       } catch (err) {
         errorEl.textContent = err.message || 'Something went wrong. Check your connection and try again.';
         errorEl.style.display = 'block';
@@ -634,7 +787,7 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
       area.innerHTML = `
         <div class="result-card">
           <div class="result-section">
-            <div class="result-label"><i class="ti ti-flag"></i> Verdict</div>
+            <div class="result-label"><i class="ti ti-flag"></i> Recommendation</div>
             <div class="verdict-row">
               <span class="verdict-badge ${vClass}"><i class="ti ${vIcon}"></i> ${escapeHtml(r.verdict || 'MAYBE')}</span>
               <p class="result-content" style="flex:1; min-width:180px;">${escapeHtml(r.one_line_take || '')}</p>
@@ -645,12 +798,17 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
             <p class="result-content">${escapeHtml(r.opportunity_type || 'Other')}</p>
           </div>
           <div class="result-section">
+            <div class="result-label"><i class="ti ti-user-search"></i> Requester check</div>
+            <p class="result-content">${escapeHtml(r.requester_context || 'Not verified')}</p>
+          </div>
+          <div class="result-section">
             <div class="result-label"><i class="ti ti-target-arrow"></i> Nuseir criteria</div>
             <div class="criteria-grid">
               ${renderCriterion(r.type_score_label || 'Opportunity Value', r.type_score, r.type_score_reason)}
               ${renderCriterion('Reach', r.reach_score, r.reach_reason)}
               ${renderCriterion('Relevance', r.relevance_score, r.relevance_reason)}
               ${renderCriterion('Business', r.business_score, r.business_reason)}
+              ${renderCriterion('Requester Credibility', r.credibility_score, r.credibility_reason)}
               ${renderCriterion('Time Cost', r.time_cost_score, r.time_cost_reason)}
             </div>
           </div>
@@ -697,6 +855,8 @@ Respond ONLY in valid JSON, no markdown fences, with exactly these keys:
 
 ${r.proposal_summary || r.ask || 'No proposal summary available.'}
 
+Requester - ${r.requester_name || 'Not stated'}
+Requester Context - ${r.requester_context || 'Not verified'}
 Timeline - ${r.timeline || 'Not stated'}
 Budget - ${r.budget || 'Not stated'}
 Website/Social Links - ${r.social_links || 'Not stated'}
@@ -707,6 +867,7 @@ ${r.type_score_label || 'Opportunity Value'}: ${r.type_score || 'MEDIUM'}
 Reach: ${r.reach_score || 'MEDIUM'}
 Relevance: ${r.relevance_score || 'MEDIUM'}
 Potential Business: ${r.business_score || 'MEDIUM'}
+Requester Credibility: ${r.credibility_score || 'WEAK'}
 Time Cost: ${r.time_cost_score || 'BORDERLINE'}
 
 Reason:
@@ -753,6 +914,429 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         if (key) localStorage.setItem('scout_admin_key', key);
       }
       return key;
+    }
+
+    function scheduleProposalLoad() {
+      clearTimeout(proposalLoadTimer);
+      proposalLoadTimer = setTimeout(() => loadProposals(false), 300);
+    }
+
+    async function loadProposals(promptForKey = true) {
+      const key = promptForKey ? getScoutAdminKey() : (localStorage.getItem('scout_admin_key') || getScoutAdminKey());
+      if (!key) return;
+      const content = document.getElementById('database-content');
+      const rows = document.getElementById('proposal-rows');
+      content.style.display = 'block';
+      rows.innerHTML = '<div class="empty-state"><span class="spinner"></span> Loading proposals...</div>';
+      try {
+        const params = new URLSearchParams({
+          search: document.getElementById('proposal-search').value.trim(),
+          status: document.getElementById('proposal-filter').value
+        });
+        const response = await fetch('/api/proposals?' + params, { headers: { 'X-Scout-Admin-Key': key } });
+        const data = await response.json();
+        if (response.status === 403) clearScoutAdminKey();
+        if (!response.ok) throw new Error(data.error || 'Could not load proposals.');
+        proposalDatabaseOpen = true;
+        renderProposalFilters(data.statuses || []);
+        renderProposalRows(data.proposals || []);
+        document.getElementById('open-database-btn').innerHTML = '<i class="ti ti-database-check"></i> Database open';
+      } catch (error) {
+        rows.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    function renderProposalFilters(statuses) {
+      const select = document.getElementById('proposal-filter');
+      const current = select.value || 'All';
+      select.innerHTML = ['All', ...statuses].map(status => `<option${status === current ? ' selected' : ''}>${escapeHtml(status)}</option>`).join('');
+    }
+
+    function renderProposalRows(proposals) {
+      const rows = document.getElementById('proposal-rows');
+      loadedProposals = new Map(proposals.map(proposal => [Number(proposal.id), proposal]));
+      if (!proposals.length) {
+        rows.innerHTML = '<div class="empty-state">No proposals match this view.</div>';
+        return;
+      }
+      const sortedProposals = [...proposals].sort(compareProposalDates);
+      sourcePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+      sourcePreviewUrls = [];
+      rows.innerHTML = sortedProposals.map(proposal => {
+        const a = proposal.assessment || {};
+        const statusOptions = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
+          .map(status => `<option${status === proposal.status ? ' selected' : ''}>${status}</option>`).join('');
+        const typeOptions = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other']
+          .map(type => `<option${type === a.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
+        const paymentOptions = ['Pending', 'Paid', 'Pro-Bono'].map(value => `<option${value === proposal.payment_status ? ' selected' : ''}>${value}</option>`).join('');
+        const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
+        return `<article class="proposal-record record-${getStatusClass(proposal.status)}">
+          <div class="record-head">
+            <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
+            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
+            <div class="record-field status-wrap"><label>Status</label><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
+            <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
+          </div>
+          <details class="record-details about-details"><summary>View full proposal</summary>${renderProposalDetails(proposal)}</details>
+          <div class="record-editor" id="editor-${proposal.id}">
+          <div class="record-fields">
+            <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
+            <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
+            <div class="record-field"><label>Engagement Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onchange="saveProposal(${proposal.id}, true)"></div>
+            <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
+          </div>
+          <hr class="editor-divider"><div class="proposal-detail-grid">
+          <div><div class="field-label"><i class="ti ti-sparkles"></i> Update with Scout</div><textarea class="proposal-notes" id="update-text-${proposal.id}" placeholder="Paste the new email, WhatsApp message, fee, date, or other update..."></textarea><div class="attachment-row"><input type="file" id="update-files-${proposal.id}" accept="image/*" multiple><button class="copy-btn" type="button" onclick="processProposalUpdate(${proposal.id}, event)"><i class="ti ti-sparkles"></i> Read & update fields</button></div><div class="field-label" style="margin-top:18px"><i class="ti ti-file-description"></i> Original proposal & update history</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
+          <div class="agreement-panel" id="agreement-${proposal.id}" style="display:${agreed ? 'block' : 'none'}">
+            <div class="field-label"><i class="ti ti-file-dollar"></i> Agreement & payment</div>
+            <div class="agreement-grid">
+              <label>Payment Status</label><select class="tracker-select" id="payment-${proposal.id}" onchange="saveProposal(${proposal.id})">${paymentOptions}</select>
+              <label>Contract/Agreement</label><div><input type="file" id="contract-${proposal.id}" accept="image/*,.pdf,.doc,.docx" onchange="uploadProposalFile(${proposal.id}, 'contract', this)">${renderAttachments(proposal, 'contract')}</div>
+              <label>Invoice</label><div><input type="file" id="invoice-${proposal.id}" accept="image/*,.pdf,.doc,.docx" onchange="uploadProposalFile(${proposal.id}, 'invoice', this)">${renderAttachments(proposal, 'invoice')}</div>
+              <label>Patty's commission</label><textarea class="proposal-notes" id="commission-${proposal.id}" placeholder="Amount, percentage, payment timing, or calculation..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.commission_breakdown || '')}</textarea>
+            </div>
+          </div>
+        </div></div></article>`;
+      }).join('');
+      loadSourcePreviews();
+    }
+
+    function renderProposalDetails(proposal) {
+      const a = proposal.assessment || {};
+      const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
+      const text = cleanSourceText(proposal.source_text);
+      const original = sourceFiles.length || text
+        ? `${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}${text ? `<div class="original-text">${escapeHtml(text)}</div>` : ''}`
+        : '<div class="original-text">Original screenshots or pasted text were not stored for this historical record. Add them with the pencil button.</div>';
+      return `<div class="original-proposal">
+        <div class="assessment-detail">
+          <div class="detail-section"><div class="detail-heading">Summary</div><div class="detail-text">${escapeHtml(a.proposal_summary || 'Not stated')}</div></div>
+          <div class="detail-section"><div class="detail-facts">
+            <strong>Requester</strong><span>${escapeHtml(a.requester_name || 'Not stated')}</span>
+            <strong>Requester Context</strong><span>${escapeHtml(a.requester_context || 'Not verified')}</span>
+            <strong>Timeline</strong><span>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</span>
+            <strong>Budget</strong><span>${escapeHtml(a.budget || 'Not stated')}</span>
+            <strong>Website/Social Links</strong><span>${linkifyText(a.social_links || 'Not stated')}</span>
+          </div></div>
+          <div class="detail-section"><div class="detail-heading">Opportunity Type</div><div class="detail-text">${escapeHtml(a.opportunity_type || 'Other')}</div></div>
+          <div class="detail-section"><div class="detail-heading">Ask</div><div class="detail-text">${escapeHtml(a.ask || 'Not stated')}</div></div>
+          <div class="detail-section"><div class="detail-heading">Next Step</div><div class="detail-text">${escapeHtml(a.next_step || 'Not stated')}</div></div>
+          <div class="detail-section"><div class="detail-heading">Reason</div><div class="detail-text">${escapeHtml(a.decision_reason || a.one_line_take || 'Not stated')}</div></div>
+        </div>
+        <div class="original-heading">Original submission</div>
+        ${original}
+      </div>`;
+    }
+
+    function linkifyText(value) {
+      const text = String(value || '');
+      const urlPattern = /https?:\/\/[^\s,]+/g;
+      let output = '';
+      let lastIndex = 0;
+      for (const match of text.matchAll(urlPattern)) {
+        output += escapeHtml(text.slice(lastIndex, match.index));
+        const url = match[0];
+        output += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`;
+        lastIndex = match.index + url.length;
+      }
+      return output + escapeHtml(text.slice(lastIndex));
+    }
+
+    function cleanSourceText(value) {
+      let text = String(value || '').trim();
+      const marker = 'Additional text:\n';
+      if (text.includes(marker)) text = text.split(marker).slice(1).join(marker).trim();
+      if (/^Scout this opportunity for Nuseir\./i.test(text)) text = '';
+      if (/^Imported historical Scout assessment\.?$/i.test(text)) text = '';
+      return text;
+    }
+
+    async function loadSourcePreviews() {
+      const key = localStorage.getItem('scout_admin_key') || '';
+      if (!key) return;
+      await Promise.all(Array.from(document.querySelectorAll('img[data-source-file]')).map(async img => {
+        try {
+          const response = await fetch(`/api/proposals/files/${img.dataset.sourceFile}`, { headers: { 'X-Scout-Admin-Key': key } });
+          if (!response.ok) return;
+          const url = URL.createObjectURL(await response.blob());
+          sourcePreviewUrls.push(url);
+          img.src = url;
+        } catch {}
+      }));
+    }
+
+    function openSourcePreview(fileId) {
+      const image = document.querySelector(`img[data-source-file="${fileId}"]`);
+      if (image?.src) window.open(image.src, '_blank', 'noopener');
+    }
+
+    function getStatusClass(status) {
+      return 'status-' + String(status || 'Pending Details').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    function updateStatusStyle(select) {
+      Array.from(select.classList).filter(name => name.startsWith('status-') && name !== 'status-select').forEach(name => select.classList.remove(name));
+      select.classList.add(getStatusClass(select.value));
+      const record = select.closest('.proposal-record');
+      if (record) {
+        Array.from(record.classList).filter(name => name.startsWith('record-status-')).forEach(name => record.classList.remove(name));
+        record.classList.add('record-' + getStatusClass(select.value));
+      }
+    }
+
+    function toggleRecordEditor(id, button) {
+      const editor = document.getElementById(`editor-${id}`);
+      const open = editor.classList.toggle('open');
+      button.innerHTML = `<i class="ti ${open ? 'ti-x' : 'ti-pencil'}"></i>`;
+      button.title = open ? 'Close editor' : 'Edit proposal';
+    }
+
+    function compareProposalDates(a, b) {
+      const dateA = parseEngagementDate(a.event_date || a.assessment?.timeline);
+      const dateB = parseEngagementDate(b.event_date || b.assessment?.timeline);
+      const unknownA = dateA === Number.MAX_SAFE_INTEGER;
+      const unknownB = dateB === Number.MAX_SAFE_INTEGER;
+      if (unknownA !== unknownB) return unknownA ? -1 : 1;
+      if (dateA !== dateB) return dateA - dateB;
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    }
+
+    function parseEngagementDate(value) {
+      const text = String(value || '').trim();
+      if (!text || /not stated|unknown|tbd|flexible/i.test(text)) return Number.MAX_SAFE_INTEGER;
+      const timestamp = Date.parse(text);
+      return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
+    }
+
+    function renderAttachments(proposal, kind) {
+      return `<div class="attachment-row">${(proposal.attachments || []).filter(file => file.kind === kind).map(file => `<span class="attachment-chip"><button type="button" onclick="downloadProposalFile(${file.id}, decodeURIComponent('${encodeURIComponent(file.file_name)}'))"><i class="ti ti-paperclip"></i> ${escapeHtml(file.file_name)}</button><button type="button" title="Delete" onclick="deleteProposalFile(${file.id})"><i class="ti ti-x"></i></button></span>`).join('')}</div>`;
+    }
+
+    function toggleAgreementFields(id) {
+      const status = document.getElementById(`status-${id}`).value;
+      document.getElementById(`agreement-${id}`).style.display = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(status) ? 'block' : 'none';
+    }
+
+    function formatProposalDate(value) {
+      if (!value) return '';
+      return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
+    }
+
+    async function saveProposal(id, resortAfterSave = false) {
+      const state = document.getElementById(`save-${id}`);
+      state.textContent = 'Saving...';
+      try {
+        const response = await fetch(`/api/proposals/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify({
+            status: document.getElementById(`status-${id}`).value,
+            notes: document.getElementById(`notes-${id}`).value,
+            type: document.getElementById(`type-${id}`).value,
+            budget: document.getElementById(`budget-${id}`).value,
+            eventDate: document.getElementById(`date-${id}`).value,
+            location: document.getElementById(`location-${id}`).value,
+            paymentStatus: document.getElementById(`payment-${id}`)?.value || 'Pending',
+            commissionBreakdown: document.getElementById(`commission-${id}`)?.value || '',
+            sourceText: document.getElementById(`source-text-${id}`)?.value || ''
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not save.');
+        state.textContent = 'Saved';
+        if (resortAfterSave) {
+          await loadProposals(false);
+          return;
+        }
+        setTimeout(() => { state.textContent = ''; }, 1400);
+      } catch (error) {
+        state.textContent = error.message;
+      }
+    }
+
+    async function processProposalUpdate(id, event) {
+      const proposal = loadedProposals.get(Number(id));
+      const updateText = document.getElementById(`update-text-${id}`).value.trim();
+      const files = Array.from(document.getElementById(`update-files-${id}`).files || []);
+      if (!proposal || (!updateText && !files.length)) return alert('Paste an update or attach at least one screenshot.');
+      const button = event?.currentTarget;
+      const original = button?.innerHTML;
+      if (button) { button.disabled = true; button.innerHTML = '<span class="spinner"></span> Reading update...'; }
+      try {
+        const content = [];
+        for (const file of files) {
+          if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name} is larger than 10 MB.`);
+          content.push({ type: 'image', source: { type: 'base64', media_type: file.type || 'image/png', data: await fileToBase64(file) } });
+        }
+        const currentRecord = {
+          assessment: proposal.assessment || {},
+          status: proposal.status,
+          engagement_date: proposal.event_date,
+          location: proposal.location,
+          notes: proposal.notes
+        };
+        content.push({
+          type: 'text',
+          text: `Update this existing Scout proposal. Merge the new information with the existing record. Preserve existing facts unless the update explicitly replaces or corrects them. Reassess the recommendation only when the new information materially changes it. Extract any new date, location, budget, requester information, links, ask, or next step. Never create a different proposal.\n\nExisting record:\n${JSON.stringify(currentRecord)}\n\nAdditional text:\n${updateText || 'The update is contained in the attached screenshot(s).'}`
+        });
+        const system = `You are Scout, Patty's opportunity scout for Nuseir Yassin. Update an existing opportunity assessment using new messages or screenshots. Return a complete merged assessment, not only changed fields. Keep the same proposal identity. Use professional executive English. Evaluate Reach, Relevance, Potential Business, Requester Credibility, Time Cost, and the type-specific opportunity score. Preserve verified facts unless contradicted. Use Not stated only when neither the existing record nor the update provides the fact. The location field must contain the event/opportunity location or Not stated. Be conservative with Nuseir's time and return only the required JSON.`;
+        const response = await fetch('/api/assess', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify({ system, content, updateProposalId: id })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Scout could not process this update.');
+        await loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Scout could not process this update.');
+      } finally {
+        if (button) { button.disabled = false; button.innerHTML = original; }
+      }
+    }
+
+    async function uploadProposalFile(proposalId, kind, input) {
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) return alert('Attachment must be 10 MB or smaller.');
+      try {
+        const data = await fileToBase64(file);
+        const response = await fetch(`/api/proposals/${proposalId}/files`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify({ kind, fileName: file.name, mimeType: file.type || 'application/octet-stream', data })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Upload failed.');
+        loadProposals(false);
+      } catch (error) { alert(error.message || 'Upload failed.'); }
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function downloadProposalFile(fileId, fileName) {
+      const response = await fetch(`/api/proposals/files/${fileId}`, { headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
+      if (!response.ok) return alert('Could not download attachment.');
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a'); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url);
+    }
+
+    async function deleteProposalFile(fileId) {
+      if (!confirm('Delete this attachment?')) return;
+      const response = await fetch(`/api/proposals/files/${fileId}`, { method: 'DELETE', headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
+      if (!response.ok) return alert('Could not delete attachment.');
+      loadProposals(false);
+    }
+
+    async function downloadProposalCsv() {
+      const response = await fetch('/api/proposals.csv', { headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || 'Could not download CSV.');
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `scout-proposals-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function responseError(response) {
+      const data = await response.json().catch(() => null);
+      if (data?.error) return data.error;
+      const text = data ? '' : await response.text().catch(() => '');
+      return text || `Request failed (${response.status})`;
+    }
+
+    async function downloadFullBackup() {
+      const button = event?.currentTarget;
+      const original = button?.innerHTML;
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="ti ti-loader-2"></i> Preparing...';
+      }
+      try {
+        const response = await fetch('/api/proposals.backup.json', {
+          headers: { 'X-Scout-Admin-Key': getScoutAdminKey() }
+        });
+        if (!response.ok) throw new Error(await responseError(response));
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="([^"]+)"/);
+        const filename = match?.[1] || `scout-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        alert(error.message || 'Could not download the full backup.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = original;
+        }
+      }
+    }
+
+    async function syncGoogleSheetBackup(event) {
+      const button = event?.currentTarget;
+      const original = button?.innerHTML;
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="ti ti-loader-2"></i> Syncing...';
+      }
+      try {
+        const response = await fetch('/api/proposals/sync-google-sheet', {
+          method: 'POST',
+          headers: { 'X-Scout-Admin-Key': getScoutAdminKey() }
+        });
+        if (!response.ok) throw new Error(await responseError(response));
+        const result = await response.json();
+        alert(`Google Sheet backup updated: ${result.rows || 0} proposals.`);
+      } catch (error) {
+        alert(error.message || 'Could not sync the Google Sheet backup.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = original;
+        }
+      }
+    }
+
+    async function importProposalFile(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      try {
+        const payload = JSON.parse(await file.text());
+        if (!Array.isArray(payload.proposals)) throw new Error('This is not a valid Scout import file.');
+        const response = await fetch('/api/proposals/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Import failed.');
+        alert(`Imported ${data.imported} proposal${data.imported === 1 ? '' : 's'}. ${data.skipped ? `${data.skipped} duplicate or invalid record${data.skipped === 1 ? '' : 's'} skipped.` : ''}`);
+        loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Could not import proposals.');
+      }
     }
 
     function clearScoutAdminKey() {
