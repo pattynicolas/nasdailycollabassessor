@@ -450,10 +450,17 @@
     .attachment-viewer-body img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
     .attachment-unavailable { max-width: 430px; padding: 28px; text-align: center; color: var(--text-secondary); }
     .attachment-unavailable i { display: block; font-size: 42px; margin-bottom: 10px; }
+    .update-preview-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .update-confirm-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; }
+    .update-confirm-grid .wide { grid-column: 1 / -1; }
+    .update-confirm-grid label { display: grid; gap: 5px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); font-weight: 650; }
+    .update-confirm-grid input, .update-confirm-grid textarea, .update-confirm-grid select { width: 100%; font: inherit; color: var(--text); background: var(--bg-secondary); border: .5px solid var(--border); border-radius: var(--radius); padding: 9px 10px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+    .update-confirm-grid textarea { min-height: 78px; }
+    .update-confirm-note { padding: 12px 16px 0; color: var(--text-secondary); font-size: 13px; line-height: 1.4; }
     .status-guide { margin-top: 12px; border: .5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .status-guide summary { cursor: pointer; font-size: 13px; font-weight: 600; }
     .status-guide-grid { display: grid; grid-template-columns: 180px 1fr; gap: 7px 12px; margin-top: 10px; font-size: 12px; line-height: 1.45; }
-    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
+    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid, .update-confirm-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
   </style>
 </head>
 <body>
@@ -539,6 +546,34 @@
     </div>
   </dialog>
 
+  <dialog class="attachment-viewer" id="update-confirm-dialog">
+    <div class="attachment-viewer-shell">
+      <div class="attachment-viewer-head">
+        <div class="attachment-viewer-title">Confirm Scout update</div>
+        <div class="attachment-viewer-actions">
+          <button class="copy-btn" id="apply-update-btn" type="button" onclick="applyPendingProposalUpdate()"><i class="ti ti-check"></i> Apply update</button>
+          <button class="icon-btn" type="button" title="Close" onclick="closeUpdateConfirmDialog()"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="attachment-viewer-body" style="display:block; background:var(--bg);">
+        <p class="update-confirm-note">Scout read the update and proposes these changes. Edit anything here before saving to the database.</p>
+        <div class="update-confirm-grid">
+          <label class="wide">Proposal name<input id="confirm-proposal-name"></label>
+          <label>Type<select id="confirm-opportunity-type"></select></label>
+          <label>Engagement date<input id="confirm-timeline"></label>
+          <label>Budget<input id="confirm-budget"></label>
+          <label>Location<input id="confirm-location"></label>
+          <label>Requester<input id="confirm-requester"></label>
+          <label class="wide">Requester context<textarea id="confirm-requester-context"></textarea></label>
+          <label class="wide">Summary<textarea id="confirm-summary"></textarea></label>
+          <label class="wide">Ask<textarea id="confirm-ask"></textarea></label>
+          <label class="wide">Next step<textarea id="confirm-next-step"></textarea></label>
+          <label class="wide">Reason<textarea id="confirm-reason"></textarea></label>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <script>
     const images = [];
     let lastLarkMessage = '';
@@ -548,6 +583,8 @@
     let sourcePreviewUrls = [];
     let attachmentPreviewUrl = '';
     let loadedProposals = new Map();
+    let updateImages = new Map();
+    let pendingProposalUpdate = null;
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -1017,7 +1054,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
           </div>
           <hr class="editor-divider"><div class="proposal-detail-grid">
-          <div><div class="field-label"><i class="ti ti-sparkles"></i> Update with Scout</div><textarea class="proposal-notes" id="update-text-${proposal.id}" placeholder="Paste the new email, WhatsApp message, fee, date, or other update..."></textarea><div class="attachment-row"><input type="file" id="update-files-${proposal.id}" accept="image/*" multiple><button class="copy-btn" type="button" onclick="processProposalUpdate(${proposal.id}, event)"><i class="ti ti-sparkles"></i> Read & update fields</button></div><div class="field-label" style="margin-top:18px"><i class="ti ti-file-description"></i> Original proposal & update history</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
+          <div><div class="field-label"><i class="ti ti-sparkles"></i> Update with Scout</div><textarea class="proposal-notes" id="update-text-${proposal.id}" placeholder="Paste the new email, WhatsApp message, fee, date, or other update..." onpaste="handleUpdatePaste(event, ${proposal.id})"></textarea><div class="update-preview-grid" id="update-preview-${proposal.id}"></div><div class="attachment-row"><input type="file" id="update-files-${proposal.id}" accept="image/*" multiple onchange="handleUpdateFiles(${proposal.id}, this.files)"><button class="copy-btn" type="button" onclick="processProposalUpdate(${proposal.id}, event)"><i class="ti ti-sparkles"></i> Read & preview changes</button></div><div class="field-label" style="margin-top:18px"><i class="ti ti-file-description"></i> Original proposal & update history</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
           <div class="agreement-panel" id="agreement-${proposal.id}" style="display:${agreed ? 'block' : 'none'}">
             <div class="field-label"><i class="ti ti-file-dollar"></i> Agreement & payment</div>
             <div class="agreement-grid">
@@ -1188,7 +1225,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     async function processProposalUpdate(id, event) {
       const proposal = loadedProposals.get(Number(id));
       const updateText = document.getElementById(`update-text-${id}`).value.trim();
-      const files = Array.from(document.getElementById(`update-files-${id}`).files || []);
+      const files = getUpdateImages(id);
       if (!proposal || (!updateText && !files.length)) return alert('Paste an update or attach at least one screenshot.');
       const button = event?.currentTarget;
       const original = button?.innerHTML;
@@ -1196,8 +1233,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       try {
         const content = [];
         for (const file of files) {
-          if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name} is larger than 10 MB.`);
-          content.push({ type: 'image', source: { type: 'base64', media_type: file.type || 'image/png', data: await fileToBase64(file) } });
+          content.push({ type: 'image', source: { type: 'base64', media_type: file.mediaType || 'image/png', data: file.base64 } });
         }
         const currentRecord = {
           assessment: proposal.assessment || {},
@@ -1214,16 +1250,146 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const response = await fetch('/api/assess', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
-          body: JSON.stringify({ system, content, updateProposalId: id })
+          body: JSON.stringify({ system, content, updateProposalId: id, previewOnly: true })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Scout could not process this update.');
-        await loadProposals(false);
+        openUpdateConfirmDialog(id, data, updateText, files);
       } catch (error) {
         alert(error.message || 'Scout could not process this update.');
       } finally {
         if (button) { button.disabled = false; button.innerHTML = original; }
       }
+    }
+
+    function getUpdateImages(id) {
+      return updateImages.get(Number(id)) || [];
+    }
+
+    async function handleUpdateFiles(id, files) {
+      for (const file of Array.from(files || [])) await addUpdateImage(id, file);
+      const input = document.getElementById(`update-files-${id}`);
+      if (input) input.value = '';
+    }
+
+    async function handleUpdatePaste(event, id) {
+      const imageItems = Array.from(event.clipboardData?.items || []).filter(item => item.type.startsWith('image/'));
+      if (!imageItems.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      for (const item of imageItems) {
+        const file = item.getAsFile();
+        if (file) await addUpdateImage(id, file);
+      }
+    }
+
+    async function addUpdateImage(id, file) {
+      if (!file.type.startsWith('image/')) return;
+      if (file.size > 10 * 1024 * 1024) return alert(`${file.name || 'Screenshot'} is larger than 10 MB.`);
+      const compressed = await compressImage(file);
+      const dataUrl = await fileToDataUrl(compressed);
+      const current = getUpdateImages(id);
+      current.push({
+        id: Date.now() + Math.random(),
+        name: file.name || 'pasted-screenshot.jpg',
+        mediaType: compressed.type || 'image/jpeg',
+        base64: dataUrl.split(',')[1],
+        dataUrl
+      });
+      updateImages.set(Number(id), current);
+      renderUpdatePreviews(id);
+    }
+
+    function renderUpdatePreviews(id) {
+      const grid = document.getElementById(`update-preview-${id}`);
+      if (!grid) return;
+      grid.innerHTML = getUpdateImages(id).map(img => `
+        <div class="thumb-wrap">
+          <img class="preview-thumb" src="${img.dataUrl}" alt="update screenshot">
+          <button class="remove-img" type="button" onclick="removeUpdateImage(${id}, '${img.id}')" aria-label="Remove">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>`).join('');
+    }
+
+    function removeUpdateImage(id, imageId) {
+      updateImages.set(Number(id), getUpdateImages(id).filter(img => String(img.id) !== String(imageId)));
+      renderUpdatePreviews(id);
+    }
+
+    function openUpdateConfirmDialog(id, assessment, updateText, files) {
+      pendingProposalUpdate = { id: Number(id), assessment, updateText, files };
+      const typeSelect = document.getElementById('confirm-opportunity-type');
+      const types = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
+      typeSelect.innerHTML = types.map(type => `<option${type === assessment.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
+      document.getElementById('confirm-proposal-name').value = assessment.proposal_name || assessment.brand || '';
+      document.getElementById('confirm-timeline').value = assessment.timeline || '';
+      document.getElementById('confirm-budget').value = assessment.budget || '';
+      document.getElementById('confirm-location').value = assessment.location || '';
+      document.getElementById('confirm-requester').value = assessment.requester_name || '';
+      document.getElementById('confirm-requester-context').value = assessment.requester_context || '';
+      document.getElementById('confirm-summary').value = assessment.proposal_summary || '';
+      document.getElementById('confirm-ask').value = assessment.ask || '';
+      document.getElementById('confirm-next-step').value = assessment.next_step || '';
+      document.getElementById('confirm-reason').value = assessment.decision_reason || assessment.one_line_take || '';
+      document.getElementById('update-confirm-dialog').showModal();
+    }
+
+    function readConfirmedAssessment() {
+      const assessment = { ...(pendingProposalUpdate?.assessment || {}) };
+      assessment.proposal_name = document.getElementById('confirm-proposal-name').value.trim() || assessment.proposal_name || assessment.brand || 'Untitled opportunity';
+      assessment.opportunity_type = document.getElementById('confirm-opportunity-type').value;
+      assessment.timeline = document.getElementById('confirm-timeline').value.trim() || 'Not stated';
+      assessment.budget = document.getElementById('confirm-budget').value.trim() || 'Not stated';
+      assessment.location = document.getElementById('confirm-location').value.trim() || 'Not stated';
+      assessment.requester_name = document.getElementById('confirm-requester').value.trim() || 'Not stated';
+      assessment.requester_context = document.getElementById('confirm-requester-context').value.trim() || 'Not verified';
+      assessment.proposal_summary = document.getElementById('confirm-summary').value.trim() || 'Not stated';
+      assessment.ask = document.getElementById('confirm-ask').value.trim() || 'Not stated';
+      assessment.next_step = document.getElementById('confirm-next-step').value.trim() || 'Not stated';
+      assessment.decision_reason = document.getElementById('confirm-reason').value.trim() || assessment.decision_reason || 'Not stated';
+      return assessment;
+    }
+
+    async function applyPendingProposalUpdate() {
+      if (!pendingProposalUpdate) return;
+      const button = document.getElementById('apply-update-btn');
+      const original = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner"></span> Saving...';
+      try {
+        const response = await fetch(`/api/proposals/${pendingProposalUpdate.id}/apply-update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify({
+            assessment: readConfirmedAssessment(),
+            updateText: pendingProposalUpdate.updateText,
+            screenshots: pendingProposalUpdate.files.map(file => ({
+              mediaType: file.mediaType,
+              data: file.base64
+            }))
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not save Scout update.');
+        const id = pendingProposalUpdate.id;
+        updateImages.set(Number(id), []);
+        document.getElementById(`update-text-${id}`).value = '';
+        renderUpdatePreviews(id);
+        closeUpdateConfirmDialog();
+        await loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Could not save Scout update.');
+      } finally {
+        button.disabled = false;
+        button.innerHTML = original;
+      }
+    }
+
+    function closeUpdateConfirmDialog() {
+      const dialog = document.getElementById('update-confirm-dialog');
+      if (dialog.open) dialog.close();
+      pendingProposalUpdate = null;
     }
 
     async function uploadProposalFile(proposalId, kind, input) {
@@ -1248,6 +1414,15 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });

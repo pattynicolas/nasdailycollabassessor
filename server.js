@@ -172,6 +172,55 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/proposals/:id/apply-update', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const id = Number(req.params.id);
+    const assessment = req.body?.assessment;
+    const updateText = String(req.body?.updateText || '').trim();
+    const screenshots = Array.isArray(req.body?.screenshots) ? req.body.screenshots : [];
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
+    if (!assessment || typeof assessment !== 'object') return res.status(400).json({ error: 'Missing approved Scout update.' });
+    if (!opportunityTypes.includes(String(assessment.opportunity_type || ''))) return res.status(400).json({ error: 'Invalid opportunity type.' });
+
+    await databaseReady;
+    const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [id]);
+    if (!current.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
+    const prior = current.rows[0];
+    const mergedSource = [prior.source_text, updateText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
+    const proposedDate = String(assessment.timeline || '').trim();
+    const proposedLocation = String(assessment.location || '').trim();
+    const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
+    const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
+
+    const result = await pool.query(
+      `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
+       WHERE id = $5 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, source_text, assessment`,
+      [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', id]
+    );
+
+    let screenshotIndex = 0;
+    for (const item of screenshots) {
+      const base64 = String(item?.data || '');
+      const imageData = Buffer.from(base64, 'base64');
+      if (!imageData.length || imageData.length > 10 * 1024 * 1024) continue;
+      screenshotIndex += 1;
+      const mimeType = String(item?.mediaType || 'image/jpeg');
+      const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+      await pool.query(
+        `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+         VALUES ($1, 'source', $2, $3, $4, $5)`,
+        [id, `proposal-update-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
+      );
+    }
+
+    syncGoogleSheetSoon();
+    res.json({ proposal: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Could not apply Scout update.' });
+  }
+});
+
 app.post('/api/proposals/:id/files', requireAdmin, async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
   try {
@@ -377,7 +426,7 @@ app.post('/api/assess', async (req, res) => {
   }
 
   try {
-    const { system, content, updateProposalId } = req.body || {};
+    const { system, content, updateProposalId, previewOnly } = req.body || {};
     if (!system || !Array.isArray(content)) {
       return res.status(400).json({ error: 'Missing assessment content.' });
     }
@@ -516,6 +565,9 @@ app.post('/api/assess', async (req, res) => {
     }
 
     const assessment = JSON.parse(outputText);
+    if (previewOnly) {
+      return res.status(200).json(assessment);
+    }
     if (pool) {
       try {
         await databaseReady;
