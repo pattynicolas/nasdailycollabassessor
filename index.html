@@ -438,6 +438,18 @@
     .attachment-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 5px; }
     .attachment-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 11px; }
     .attachment-chip button { border: 0; background: none; color: var(--text-danger); cursor: pointer; }
+    .attachment-chip .attachment-open { color: var(--text); display: inline-flex; align-items: center; gap: 5px; text-align: left; }
+    .attachment-viewer { width: min(920px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); padding: 0; border: 0; border-radius: var(--radius); box-shadow: 0 24px 70px rgba(0,0,0,.25); background: var(--bg); }
+    .attachment-viewer::backdrop { background: rgba(20, 24, 28, .55); }
+    .attachment-viewer-shell { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+    .attachment-viewer-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: .5px solid var(--border); }
+    .attachment-viewer-title { min-width: 0; flex: 1; font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .attachment-viewer-actions { display: flex; gap: 7px; }
+    .attachment-viewer-body { min-height: 0; display: grid; place-items: center; overflow: auto; background: var(--bg-secondary); }
+    .attachment-viewer-body iframe { width: 100%; height: 100%; border: 0; background: white; }
+    .attachment-viewer-body img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+    .attachment-unavailable { max-width: 430px; padding: 28px; text-align: center; color: var(--text-secondary); }
+    .attachment-unavailable i { display: block; font-size: 42px; margin-bottom: 10px; }
     .status-guide { margin-top: 12px; border: .5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .status-guide summary { cursor: pointer; font-size: 13px; font-weight: 600; }
     .status-guide-grid { display: grid; grid-template-columns: 180px 1fr; gap: 7px 12px; margin-top: 10px; font-size: 12px; line-height: 1.45; }
@@ -514,6 +526,19 @@
     </section>
   </div>
 
+  <dialog class="attachment-viewer" id="attachment-viewer" onclick="closeAttachmentViewerFromBackdrop(event)">
+    <div class="attachment-viewer-shell">
+      <div class="attachment-viewer-head">
+        <div class="attachment-viewer-title" id="attachment-viewer-title">Attachment</div>
+        <div class="attachment-viewer-actions">
+          <button class="copy-btn" id="attachment-download-btn" type="button" title="Download file"><i class="ti ti-download"></i> Download</button>
+          <button class="icon-btn" type="button" title="Close preview" onclick="closeAttachmentViewer()"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="attachment-viewer-body" id="attachment-viewer-body"></div>
+    </div>
+  </dialog>
+
   <script>
     const images = [];
     let lastLarkMessage = '';
@@ -521,11 +546,17 @@
     let proposalDatabaseOpen = false;
     let proposalLoadTimer = null;
     let sourcePreviewUrls = [];
+    let attachmentPreviewUrl = '';
     let loadedProposals = new Map();
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
     const fileInput = document.getElementById('file-input');
+    document.getElementById('attachment-viewer').addEventListener('close', () => {
+      document.getElementById('attachment-viewer-body').innerHTML = '';
+      if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
+      attachmentPreviewUrl = '';
+    });
 
     window.addEventListener('load', retryPendingLarkTodo);
     fileInput.addEventListener('change', e => handleFiles(e.target.files));
@@ -1109,7 +1140,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function renderAttachments(proposal, kind) {
-      return `<div class="attachment-row">${(proposal.attachments || []).filter(file => file.kind === kind).map(file => `<span class="attachment-chip"><button type="button" onclick="downloadProposalFile(${file.id}, decodeURIComponent('${encodeURIComponent(file.file_name)}'))"><i class="ti ti-paperclip"></i> ${escapeHtml(file.file_name)}</button><button type="button" title="Delete" onclick="deleteProposalFile(${file.id})"><i class="ti ti-x"></i></button></span>`).join('')}</div>`;
+      return `<div class="attachment-row">${(proposal.attachments || []).filter(file => file.kind === kind).map(file => `<span class="attachment-chip"><button class="attachment-open" type="button" title="Preview file" onclick="openAttachmentViewer(${file.id}, decodeURIComponent('${encodeURIComponent(file.file_name)}'), decodeURIComponent('${encodeURIComponent(file.mime_type || '')}'))"><i class="ti ti-paperclip"></i> ${escapeHtml(file.file_name)}</button><button type="button" title="Delete" onclick="deleteProposalFile(${file.id})"><i class="ti ti-x"></i></button></span>`).join('')}</div>`;
     }
 
     function toggleAgreementFields(id) {
@@ -1229,6 +1260,44 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const link = document.createElement('a'); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url);
     }
 
+    async function openAttachmentViewer(fileId, fileName, declaredMimeType) {
+      const dialog = document.getElementById('attachment-viewer');
+      const body = document.getElementById('attachment-viewer-body');
+      document.getElementById('attachment-viewer-title').textContent = fileName;
+      body.innerHTML = '<div class="attachment-unavailable"><span class="spinner"></span><p>Loading preview...</p></div>';
+      document.getElementById('attachment-download-btn').onclick = () => downloadProposalFile(fileId, fileName);
+      dialog.showModal();
+      try {
+        const response = await fetch(`/api/proposals/files/${fileId}`, { headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
+        if (!response.ok) throw new Error('Could not open attachment.');
+        const blob = await response.blob();
+        if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
+        attachmentPreviewUrl = URL.createObjectURL(blob);
+        const mimeType = String(blob.type || declaredMimeType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) {
+          body.innerHTML = `<img src="${attachmentPreviewUrl}" alt="${escapeHtml(fileName)}">`;
+        } else if (mimeType === 'application/pdf') {
+          body.innerHTML = `<iframe src="${attachmentPreviewUrl}" title="${escapeHtml(fileName)}"></iframe>`;
+        } else {
+          body.innerHTML = `<div class="attachment-unavailable"><i class="ti ti-file-description"></i><strong>${escapeHtml(fileName)}</strong><p>This file type cannot be previewed securely in the browser. Download it when you need to open it.</p></div>`;
+        }
+      } catch (error) {
+        body.innerHTML = `<div class="attachment-unavailable"><i class="ti ti-alert-circle"></i><p>${escapeHtml(error.message || 'Could not open attachment.')}</p></div>`;
+      }
+    }
+
+    function closeAttachmentViewer() {
+      const dialog = document.getElementById('attachment-viewer');
+      if (dialog.open) dialog.close();
+      document.getElementById('attachment-viewer-body').innerHTML = '';
+      if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
+      attachmentPreviewUrl = '';
+    }
+
+    function closeAttachmentViewerFromBackdrop(event) {
+      if (event.target === event.currentTarget) closeAttachmentViewer();
+    }
+
     async function deleteProposalFile(fileId) {
       if (!confirm('Delete this attachment?')) return;
       const response = await fetch(`/api/proposals/files/${fileId}`, { method: 'DELETE', headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
@@ -1250,6 +1319,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       link.download = `scout-proposals-${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
+    }
+
+    async function responseError(response) {
+      const data = await response.json().catch(() => null);
+      if (data?.error) return data.error;
+      const text = data ? '' : await response.text().catch(() => '');
+      return text || `Request failed (${response.status})`;
     }
 
     async function downloadFullBackup() {
