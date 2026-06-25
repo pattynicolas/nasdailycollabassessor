@@ -16,11 +16,62 @@ const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databa
 const proposalStatuses = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
 const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
 const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
-const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
+const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes', 'Source Files', 'Contracts', 'Invoices', 'Attachment Count'];
+const attachmentSheetHeaders = ['Attachment ID', 'Proposal ID', 'Kind', 'File Name', 'MIME Type', 'File Size', 'Created', 'Data Key'];
+const attachmentDataSheetHeaders = ['Data Key', 'Attachment ID', 'Chunk Index', 'Chunk Count', 'Base64 Chunk'];
+const attachmentBackupChunkSize = 45000;
 
-function proposalSheetRow(row) {
+function groupAttachmentsByProposal(files) {
+  const grouped = new Map();
+  for (const file of files) {
+    const key = String(file.proposal_id);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(file);
+  }
+  return grouped;
+}
+
+function attachmentNames(files, kind) {
+  return files.filter(file => file.kind === kind).map(file => file.file_name).join('; ');
+}
+
+function proposalSheetRow(row, filesByProposal = new Map()) {
   const a = row.assessment || {};
-  return [row.id, row.created_at, row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes].map(value => value ?? '');
+  const files = filesByProposal.get(String(row.id)) || [];
+  return [row.id, row.created_at, row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes, attachmentNames(files, 'source'), attachmentNames(files, 'contract'), attachmentNames(files, 'invoice'), files.length].map(value => value ?? '');
+}
+
+function buildAttachmentBackupRows(files) {
+  const attachmentRows = [];
+  const attachmentDataRows = [];
+
+  for (const file of files) {
+    const dataKey = `attachment-${file.id}`;
+    const base64 = String(file.file_data_base64 || '');
+    const chunkCount = Math.max(1, Math.ceil(base64.length / attachmentBackupChunkSize));
+    attachmentRows.push([
+      file.id,
+      file.proposal_id,
+      file.kind,
+      file.file_name,
+      file.mime_type,
+      file.file_size,
+      file.created_at,
+      dataKey
+    ].map(value => value ?? ''));
+
+    for (let index = 0; index < chunkCount; index += 1) {
+      attachmentDataRows.push([
+        dataKey,
+        file.id,
+        index + 1,
+        chunkCount,
+        base64.slice(index * attachmentBackupChunkSize, (index + 1) * attachmentBackupChunkSize)
+      ]);
+    }
+  }
+
+  return { attachmentRows, attachmentDataRows };
 }
 
 async function syncGoogleSheet() {
@@ -28,17 +79,32 @@ async function syncGoogleSheet() {
   const webhookSecret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET?.trim();
   if (!webhookUrl || !webhookSecret || !pool) return { configured: false };
   const result = await pool.query('SELECT * FROM scout_proposals ORDER BY id');
+  const files = await pool.query(`
+    SELECT id, proposal_id, kind, file_name, mime_type, file_size, created_at,
+      encode(file_data, 'base64') AS file_data_base64
+    FROM scout_proposal_files ORDER BY proposal_id, id
+  `);
+  const filesByProposal = groupAttachmentsByProposal(files.rows);
+  const { attachmentRows, attachmentDataRows } = buildAttachmentBackupRows(files.rows);
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret: webhookSecret, sheet: 'Proposals', headers: sheetHeaders, rows: result.rows.map(proposalSheetRow), synced_at: new Date().toISOString() })
+    body: JSON.stringify({
+      secret: webhookSecret,
+      synced_at: new Date().toISOString(),
+      sheets: [
+        { sheet: 'Proposals', headers: sheetHeaders, rows: result.rows.map(row => proposalSheetRow(row, filesByProposal)) },
+        { sheet: 'Attachments', headers: attachmentSheetHeaders, rows: attachmentRows },
+        { sheet: 'Attachment Data', headers: attachmentDataSheetHeaders, rows: attachmentDataRows }
+      ]
+    })
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`Google Sheet backup failed (${response.status}).`);
   let payload;
   try { payload = JSON.parse(text); } catch { payload = { ok: true }; }
   if (payload?.ok === false) throw new Error(payload.error || 'Google Sheet backup was rejected.');
-  return { configured: true, rows: result.rowCount, ...payload };
+  return { configured: true, rows: result.rowCount, attachments: files.rowCount, attachment_chunks: attachmentDataRows.length, ...payload };
 }
 
 function syncGoogleSheetSoon() {
