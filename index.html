@@ -381,7 +381,7 @@
     .record-status-rejected { background: color-mix(in srgb, var(--bg-danger) 28%, var(--bg)); border-left: 4px solid var(--text-danger); }
     .record-status-contract-signed { background: color-mix(in srgb, var(--bg-info) 45%, var(--bg)); border-left: 4px solid var(--text-info); }
     .record-status-delivered { background: color-mix(in srgb, var(--bg-success) 38%, var(--bg)); border-left: 4px solid var(--text-success); }
-    .record-head { display: grid; grid-template-columns: 140px minmax(280px, 1fr) minmax(190px, 230px) 40px; gap: 14px; align-items: center; }
+    .record-head { display: grid; grid-template-columns: 140px minmax(280px, 1fr) minmax(190px, 230px) auto; gap: 14px; align-items: center; }
     .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; }
     .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
     .proposal-title { font-size: 16px; font-weight: 650; margin-bottom: 5px; }
@@ -395,6 +395,7 @@
     .status-agreed-pending-contract, .status-contract-signed { background: var(--bg-info); color: var(--text-info); }
     .status-rejected { background: var(--bg-danger); color: var(--text-danger); }
     .status-delivered { background: var(--bg-success); color: var(--text-success); }
+    .record-actions { display: flex; gap: 8px; align-items: center; justify-self: end; }
     .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: .5px solid var(--border-mid); border-radius: var(--radius); background: var(--bg); color: var(--text); cursor: pointer; font-size: 17px; }
     .icon-btn:hover { background: var(--bg-secondary); }
     .about-details { margin-top: 10px; }
@@ -1038,12 +1039,16 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           .map(type => `<option${type === a.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
         const paymentOptions = ['Pending', 'Paid', 'Pro-Bono'].map(value => `<option${value === proposal.payment_status ? ' selected' : ''}>${value}</option>`).join('');
         const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
+        const deleteLabel = escapeHtml(getProposalDeleteLabel(proposal));
         return `<article class="proposal-record record-${getStatusClass(proposal.status)}">
           <div class="record-head">
             <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
             <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
             <div class="record-field status-wrap"><label>Status</label><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
-            <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
+            <div class="record-actions">
+              <button class="icon-btn" type="button" title="Delete proposal" aria-label="Delete ${deleteLabel}" onclick="deleteProposal(${proposal.id})"><i class="ti ti-trash"></i></button>
+              <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
+            </div>
           </div>
           <details class="record-details about-details"><summary>View full proposal</summary>${renderProposalDetails(proposal)}</details>
           <div class="record-editor" id="editor-${proposal.id}">
@@ -1178,6 +1183,11 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function renderAttachments(proposal, kind) {
       return `<div class="attachment-row">${(proposal.attachments || []).filter(file => file.kind === kind).map(file => `<span class="attachment-chip"><button class="attachment-open" type="button" title="Preview file" onclick="openAttachmentViewer(${file.id}, decodeURIComponent('${encodeURIComponent(file.file_name)}'), decodeURIComponent('${encodeURIComponent(file.mime_type || '')}'))"><i class="ti ti-paperclip"></i> ${escapeHtml(file.file_name)}</button><button type="button" title="Delete" onclick="deleteProposalFile(${file.id})"><i class="ti ti-x"></i></button></span>`).join('')}</div>`;
+    }
+
+    function getProposalDeleteLabel(proposal) {
+      const assessment = proposal?.assessment || {};
+      return assessment.proposal_name || assessment.brand || `proposal #${proposal?.id || ''}`.trim();
     }
 
     function toggleAgreementFields(id) {
@@ -1478,6 +1488,24 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const response = await fetch(`/api/proposals/files/${fileId}`, { method: 'DELETE', headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
       if (!response.ok) return alert('Could not delete attachment.');
       loadProposals(false);
+    }
+
+    async function deleteProposal(id) {
+      const proposal = loadedProposals.get(Number(id));
+      const label = getProposalDeleteLabel(proposal);
+      const confirmation = prompt(`Delete "${label}"?\n\nType DELETE to confirm. This removes the proposal and all its stored attachments.`);
+      if (confirmation !== 'DELETE') return;
+      try {
+        const response = await fetch(`/api/proposals/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-Scout-Admin-Key': getScoutAdminKey() }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Could not delete proposal.');
+        await loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Could not delete proposal.');
+      }
     }
 
     async function downloadProposalCsv() {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import pg from 'pg';
 import { fileURLToPath } from 'node:url';
+import { deleteProposalById } from './proposal-delete.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -235,6 +236,19 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     res.json({ proposal: result.rows[0] });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Could not update proposal.' });
+  }
+});
+
+app.delete('/api/proposals/:id', requireAdmin, async (req, res) => {
+  try {
+    const deleted = await deleteProposalById({
+      pool,
+      id: Number(req.params.id),
+      afterDelete: syncGoogleSheetSoon
+    });
+    res.json({ deleted: true, proposal: deleted });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Could not delete proposal.' });
   }
 });
 
