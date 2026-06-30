@@ -606,6 +606,7 @@
     let lastLarkMessage = '';
     let lastAssessment = null;
     let proposalDatabaseOpen = false;
+    let proposalAccessRole = 'admin';
     let proposalLoadTimer = null;
     let sourcePreviewUrls = [];
     let attachmentPreviewUrl = '';
@@ -1035,10 +1036,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function getScoutAdminKey() {
-      let key = localStorage.getItem('scout_admin_key') || '';
+      let key = localStorage.getItem('scout_access_key') || localStorage.getItem('scout_admin_key') || '';
       if (!key) {
-        key = prompt('Enter Patty admin key to use this restricted Scout action:') || '';
-        if (key) localStorage.setItem('scout_admin_key', key);
+        key = prompt('Enter Scout access key:') || '';
+        if (key) {
+          localStorage.setItem('scout_access_key', key);
+          localStorage.setItem('scout_admin_key', key);
+        }
       }
       return key;
     }
@@ -1065,6 +1069,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         if (response.status === 403) clearScoutAdminKey();
         if (!response.ok) throw new Error(data.error || 'Could not load proposals.');
         proposalDatabaseOpen = true;
+        proposalAccessRole = data.access_role || 'admin';
+        updateProposalToolbarAccess();
         renderProposalFilters(data.statuses || []);
         renderProposalRows(data.proposals || []);
         document.getElementById('open-database-btn').innerHTML = '<i class="ti ti-database-check"></i> Database open';
@@ -1081,6 +1087,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function renderProposalRows(proposals) {
       const rows = document.getElementById('proposal-rows');
+      const readOnly = proposalAccessRole !== 'admin';
       loadedProposals = new Map(proposals.map(proposal => [Number(proposal.id), proposal]));
       if (!proposals.length) {
         rows.innerHTML = '<div class="empty-state">No proposals match this view.</div>';
@@ -1102,14 +1109,14 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           <div class="record-head">
             <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
             <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
-            <div class="record-field status-wrap"><label>Status</label><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
-            <div class="record-actions">
+            <div class="record-field status-wrap"><label>Status</label>${readOnly ? `<div class="tracker-input">${escapeHtml(proposal.status || 'Pending Details')}</div>` : `<select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select>`}<span class="save-state" id="save-${proposal.id}"></span></div>
+            ${readOnly ? '' : `<div class="record-actions">
               <button class="icon-btn" type="button" title="Delete proposal" aria-label="Delete ${deleteLabel}" onclick="deleteProposal(${proposal.id})"><i class="ti ti-trash"></i></button>
               <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
-            </div>
+            </div>`}
           </div>
-          <details class="record-details about-details"><summary>View full proposal</summary>${renderProposalDetails(proposal)}</details>
-          <div class="record-editor" id="editor-${proposal.id}">
+          <details class="record-details about-details"><summary>View full proposal</summary>${renderProposalDetails(proposal, readOnly)}</details>
+          ${readOnly ? '' : `<div class="record-editor" id="editor-${proposal.id}">
           <div class="record-fields">
             <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
             <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
@@ -1127,12 +1134,12 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
               <label>Patty's commission</label><textarea class="proposal-notes" id="commission-${proposal.id}" placeholder="Amount, percentage, payment timing, or calculation..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.commission_breakdown || '')}</textarea>
             </div>
           </div>
-        </div></div></article>`;
+        </div></div>`}</article>`;
       }).join('');
       loadSourcePreviews();
     }
 
-    function renderProposalDetails(proposal) {
+    function renderProposalDetails(proposal, readOnly = false) {
       const a = proposal.assessment || {};
       const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
       const text = cleanSourceText(proposal.source_text);
@@ -1147,7 +1154,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             <strong>Requester</strong><span>${escapeHtml(a.requester_name || 'Not stated')}</span>
             <strong>Requester Context</strong><span>${escapeHtml(a.requester_context || 'Not verified')}</span>
             <strong>Timeline</strong><span>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</span>
-            <strong>Location</strong><input class="inline-detail-input" value="${locationValue}" placeholder="Not stated" onblur="saveProposalLocation(${proposal.id}, this.value)">
+            <strong>Location</strong>${readOnly ? `<span>${escapeHtml(proposal.location || a.location || 'Not stated')}</span>` : `<input class="inline-detail-input" value="${locationValue}" placeholder="Not stated" onblur="saveProposalLocation(${proposal.id}, this.value)">`}
             <strong>Budget</strong><span>${escapeHtml(a.budget || 'Not stated')}</span>
             <strong>Website/Social Links</strong><span>${linkifyText(a.social_links || 'Not stated')}</span>
           </div></div>
@@ -1700,7 +1707,18 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function clearScoutAdminKey() {
+      localStorage.removeItem('scout_access_key');
       localStorage.removeItem('scout_admin_key');
+    }
+
+    function updateProposalToolbarAccess() {
+      const readOnly = proposalAccessRole !== 'admin';
+      Array.from(document.querySelectorAll('.database-toolbar .copy-btn')).forEach(button => {
+        const action = button.textContent || '';
+        if (/Download CSV|Full backup|Sync Google Sheet|Import proposals/.test(action)) {
+          button.style.display = readOnly ? 'none' : '';
+        }
+      });
     }
 
     async function sendLarkMessage() {

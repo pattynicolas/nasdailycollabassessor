@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import pg from 'pg';
 import { fileURLToPath } from 'node:url';
 import { deleteProposalById } from './proposal-delete.js';
+import { pendingNuseirStatus } from './nuseir-summary.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,7 +15,7 @@ const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } }) : null;
 
-const proposalStatuses = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
+const proposalStatuses = ['Pending Details', pendingNuseirStatus, 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
 const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
 const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
 const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes', 'Source Files', 'Contracts', 'Invoices', 'Attachment Count'];
@@ -178,7 +179,7 @@ app.get('/api/version', (_req, res) => {
   });
 });
 
-app.get('/api/proposals', requireAdmin, async (req, res) => {
+app.get('/api/proposals', requireDatabaseRead, async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Proposal database is not connected. Add DATABASE_URL in Render.' });
   try {
     await databaseReady;
@@ -201,7 +202,7 @@ app.get('/api/proposals', requireAdmin, async (req, res) => {
        FROM scout_proposals p ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY p.created_at DESC LIMIT 500`,
       values
     );
-    res.json({ proposals: result.rows, statuses: proposalStatuses });
+    res.json({ proposals: result.rows, statuses: proposalStatuses, access_role: getAccessRole(req) });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Could not load proposals.' });
   }
@@ -325,7 +326,7 @@ app.post('/api/proposals/:id/files', requireAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/proposals/files/:fileId', requireAdmin, async (req, res) => {
+app.get('/api/proposals/files/:fileId', requireDatabaseRead, async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
   const result = await pool.query('SELECT file_name, mime_type, file_data FROM scout_proposal_files WHERE id = $1', [Number(req.params.fileId)]);
   if (!result.rowCount) return res.status(404).json({ error: 'Attachment not found.' });
@@ -863,16 +864,30 @@ app.post('/api/lark/message', async (req, res) => {
 });
 
 function isAuthorizedAdmin(req) {
-  const adminKey = process.env.SCOUT_ADMIN_KEY?.trim();
-  if (!adminKey) return false;
+  return getAccessRole(req) === 'admin';
+}
 
+function getAccessRole(req) {
+  const adminKey = process.env.SCOUT_ADMIN_KEY?.trim();
+  const viewerKey = process.env.SCOUT_VIEWER_KEY?.trim();
   const providedKey = req.headers['x-scout-admin-key'];
-  return typeof providedKey === 'string' && timingSafeEqual(providedKey.trim(), adminKey);
+  if (typeof providedKey !== 'string') return 'none';
+  const trimmed = providedKey.trim();
+  if (adminKey && timingSafeEqual(trimmed, adminKey)) return 'admin';
+  if (viewerKey && timingSafeEqual(trimmed, viewerKey)) return 'viewer';
+  return 'none';
 }
 
 function requireAdmin(req, res, next) {
   if (!isAuthorizedAdmin(req)) {
     return res.status(403).json({ error: 'Not authorized. The proposal database is restricted to Patty.' });
+  }
+  next();
+}
+
+function requireDatabaseRead(req, res, next) {
+  if (getAccessRole(req) === 'none') {
+    return res.status(403).json({ error: 'Not authorized. This proposal view is restricted.' });
   }
   next();
 }
