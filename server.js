@@ -88,7 +88,85 @@ Final decision philosophy, in order:
 2. Strategic leverage
 3. Mission alignment
 4. Revenue and business opportunities
-5. Efficient use of Nuseir's time`;
+5. Efficient use of Nuseir's time
+
+Confidence and intake hygiene:
+- Add an overall confidence level based on how complete and verifiable the submission is.
+- Use exactly one confidence level: High, Medium, or Low.
+- High = direct, clear, specific, and verifiable.
+- Medium = mostly clear, with a few important unknowns.
+- Low = forwarded chain is messy, details are partial, attachments are missing context, or requester/opportunity facts cannot be confidently verified.
+- If the submission is too messy, contradictory, or incomplete to assess properly, set review_flag to "Needs human cleanup" and explain the missing pieces plainly.
+- If the submission is workable without human cleanup, set review_flag to "Ready".`;
+
+const attachmentKindsForStorage = new Set(['source', 'contract', 'invoice']);
+const forwardedBoundaryPatterns = [
+  /-{2,}\s*Forwarded message\s*-{2,}/i,
+  /Begin forwarded message:/i,
+  /Original Message/i
+];
+
+function normalizeWhitespace(value) {
+  return String(value || '').replace(/\r/g, '').trim();
+}
+
+function normalizeTextFingerprint(value) {
+  return normalizeWhitespace(value)
+    .toLowerCase()
+    .replace(/\b(fwd?|re):\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[^a-z0-9@.:/\- ]+/g, '')
+    .trim();
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
+function classifyInboundSource(email) {
+  const combined = [email.subject, email.text].filter(Boolean).join('\n');
+  return /(forwarded message|begin forwarded message|^fwd:|^fw:)/im.test(combined)
+    ? 'Forwarded Email'
+    : 'Direct Email';
+}
+
+function extractBestEmailBody(text) {
+  const raw = normalizeWhitespace(text);
+  if (!raw) return '';
+  for (const pattern of forwardedBoundaryPatterns) {
+    if (pattern.test(raw)) {
+      const [, tail = ''] = raw.split(pattern);
+      if (tail.trim()) return tail.trim();
+    }
+  }
+  return raw;
+}
+
+function inferIntakeConfidence(email, bodyText) {
+  const text = normalizeWhitespace(bodyText || email.text || '');
+  const hasForwarded = classifyInboundSource(email) === 'Forwarded Email';
+  const signalCount = [
+    /@\S+\.\S+/.test(text),
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/i.test(text),
+    /\b(usd|\$|fee|budget|honorarium|covered|travel|accommodation)\b/i.test(text),
+    /\b(https?:\/\/|www\.)\S+/i.test(text),
+    text.length > 900
+  ].filter(Boolean).length;
+
+  if (!text || text.length < 180) return 'Low';
+  if (hasForwarded && signalCount <= 2) return 'Low';
+  if (signalCount >= 4) return 'High';
+  return 'Medium';
+}
+
+function buildSourceFingerprint(email, bodyText) {
+  const basis = [
+    normalizeTextFingerprint(email.from),
+    normalizeTextFingerprint(email.subject),
+    normalizeTextFingerprint(bodyText).slice(0, 6000)
+  ].join('|');
+  return sha256(basis);
+}
 
 function groupAttachmentsByProposal(files) {
   const grouped = new Map();
@@ -208,6 +286,8 @@ function buildAssessmentSchema() {
       location: { type: 'string' },
       budget: { type: 'string' },
       social_links: { type: 'string' },
+      confidence: { type: 'string', enum: ['High', 'Medium', 'Low'] },
+      review_flag: { type: 'string', enum: ['Ready', 'Needs human cleanup'] },
       type_score_label: { type: 'string' },
       type_score: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
       type_score_reason: { type: 'string' },
@@ -238,6 +318,8 @@ function buildAssessmentSchema() {
       'location',
       'budget',
       'social_links',
+      'confidence',
+      'review_flag',
       'type_score_label',
       'type_score',
       'type_score_reason',
@@ -270,7 +352,7 @@ function toOpenAIInputContent(content = []) {
   }).filter(Boolean);
 }
 
-async function runScoutAssessment({ system, content, existingProposalId = 0, previewOnly = false }) {
+async function runScoutAssessment({ system, content, existingProposalId = 0, previewOnly = false, proposalMeta = null }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('Missing OPENAI_API_KEY in Render environment variables.');
 
@@ -325,7 +407,7 @@ async function runScoutAssessment({ system, content, existingProposalId = 0, pre
     const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : rawSourceText).slice(0, 50000);
     let saved;
     if (existingProposalId) {
-      const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
+      const current = await pool.query('SELECT source_text, event_date, location, intake_source, intake_confidence, inbound_message_id, source_fingerprint FROM scout_proposals WHERE id = $1', [existingProposalId]);
       if (!current.rowCount) throw new Error('Proposal not found.');
       const prior = current.rows[0];
       const mergedSource = [prior.source_text, sourceText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
@@ -334,14 +416,19 @@ async function runScoutAssessment({ system, content, existingProposalId = 0, pre
       const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
       const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
       saved = await pool.query(
-        `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
-         WHERE id = $5 RETURNING id, created_at, status`,
-        [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
+        `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4,
+         intake_source = COALESCE($5, intake_source), intake_confidence = COALESCE($6, intake_confidence),
+         inbound_message_id = COALESCE($7, inbound_message_id), source_fingerprint = COALESCE($8, source_fingerprint),
+         updated_at = NOW()
+         WHERE id = $9 RETURNING id, created_at, status`,
+        [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', proposalMeta?.intakeSource || null, proposalMeta?.intakeConfidence || null, proposalMeta?.messageId || null, proposalMeta?.sourceFingerprint || null, existingProposalId]
       );
     } else {
       saved = await pool.query(
-        'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
-        [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
+        `INSERT INTO scout_proposals
+         (assessment, source_text, event_date, location, intake_source, intake_confidence, inbound_message_id, source_fingerprint)
+         VALUES ($1::jsonb, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at, status`,
+        [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || ''), proposalMeta?.intakeSource || 'Manual', proposalMeta?.intakeConfidence || assessment.confidence || 'Medium', proposalMeta?.messageId || '', proposalMeta?.sourceFingerprint || '']
       );
     }
 
@@ -357,6 +444,28 @@ async function runScoutAssessment({ system, content, existingProposalId = 0, pre
          VALUES ($1, 'source', $2, $3, $4, $5)`,
         [saved.rows[0].id, `${existingProposalId ? 'proposal-update' : 'proposal-screenshot'}-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
       );
+    }
+
+    if (proposalMeta?.rawAttachments?.length) {
+      let attachmentIndex = 0;
+      for (const attachment of proposalMeta.rawAttachments.filter(item => !String(item.mimeType || '').startsWith('image/'))) {
+        const mimeType = String(attachment.mimeType || 'application/octet-stream');
+        const data = Buffer.from(String(attachment.data || ''), 'base64');
+        if (!data.length || data.length > 10 * 1024 * 1024) continue;
+        attachmentIndex += 1;
+        const baseName = String(attachment.fileName || `email-attachment-${attachmentIndex}`).slice(0, 180);
+        const duplicateFile = await pool.query(
+          `SELECT id FROM scout_proposal_files
+           WHERE proposal_id = $1 AND kind = 'source' AND file_name = $2 AND file_size = $3 LIMIT 1`,
+          [saved.rows[0].id, baseName, data.length]
+        );
+        if (duplicateFile.rowCount) continue;
+        await pool.query(
+          `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+           VALUES ($1, 'source', $2, $3, $4, $5)`,
+          [saved.rows[0].id, baseName, mimeType, data.length, data]
+        );
+      }
     }
 
     assessment.proposal_record = saved.rows[0];
@@ -383,6 +492,7 @@ function normalizeInboundEmail(payload) {
     subject: subject || '(No subject)',
     text,
     messageId: String(payload.messageId || payload.message_id || '').trim(),
+    sourceLabel: String(payload.sourceLabel || payload.source_label || '').trim(),
     attachments: attachments.map(item => ({
       fileName: String(item.fileName || item.filename || 'attachment').trim(),
       mimeType: String(item.mimeType || item.contentType || 'application/octet-stream').trim(),
@@ -392,17 +502,25 @@ function normalizeInboundEmail(payload) {
 }
 
 function buildInboundEmailContent(email) {
+  const mainBody = extractBestEmailBody(email.text);
+  const attachmentManifest = email.attachments.length
+    ? email.attachments.map(item => `- ${item.fileName || 'attachment'} (${item.mimeType || 'application/octet-stream'})`).join('\n')
+    : 'None';
   const headerBlock = [
     `Scout this forwarded email opportunity for Nuseir.`,
     ``,
+    `Submission Source: ${email.sourceLabel || classifyInboundSource(email)}`,
     `From: ${email.from}`,
     email.to ? `To: ${email.to}` : '',
     email.cc ? `CC: ${email.cc}` : '',
     `Subject: ${email.subject}`,
     email.messageId ? `Message ID: ${email.messageId}` : '',
     ``,
+    `Attachments:`,
+    attachmentManifest,
+    ``,
     `Additional text:`,
-    email.text || '(No plain-text body provided.)'
+    mainBody || '(No plain-text body provided.)'
   ].filter(Boolean).join('\n');
 
   const content = [{ type: 'text', text: headerBlock }];
@@ -440,6 +558,9 @@ function buildAutomationLarkDraft(assessment, email) {
 
 ${assessment.proposal_summary || assessment.ask || 'No proposal summary available.'}
 
+Source - ${email.sourceLabel || classifyInboundSource(email)}
+Confidence - ${assessment.confidence || 'Medium'}
+Review Status - ${assessment.review_flag || 'Ready'}
 From - ${email.from}
 Subject - ${email.subject}
 Requester - ${assessment.requester_name || 'Not stated'}
@@ -474,8 +595,16 @@ async function initializeDatabase() {
     ADD COLUMN IF NOT EXISTS event_date TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'Pending',
-    ADD COLUMN IF NOT EXISTS commission_breakdown TEXT NOT NULL DEFAULT ''`);
+    ADD COLUMN IF NOT EXISTS commission_breakdown TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS intake_source TEXT NOT NULL DEFAULT 'Manual',
+    ADD COLUMN IF NOT EXISTS intake_confidence TEXT NOT NULL DEFAULT 'Medium',
+    ADD COLUMN IF NOT EXISTS inbound_message_id TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS source_fingerprint TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'Pending Details'`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS scout_proposals_inbound_message_id_idx
+    ON scout_proposals (inbound_message_id) WHERE inbound_message_id <> ''`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS scout_proposals_source_fingerprint_idx
+    ON scout_proposals (source_fingerprint) WHERE source_fingerprint <> ''`);
   await pool.query(`UPDATE scout_proposals SET status = CASE
     WHEN status IN ('New', 'Reviewing', 'Needs Info') THEN 'Pending Details'
     WHEN status IN ('Approved', 'Sent to Nuseir') THEN 'Agreed; Pending Contract'
@@ -540,7 +669,7 @@ app.get('/api/proposals', requireDatabaseRead, async (req, res) => {
     }
     const result = await pool.query(
       `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location, p.source_text,
-        p.payment_status, p.commission_breakdown, p.assessment,
+        p.payment_status, p.commission_breakdown, p.intake_source, p.intake_confidence, p.inbound_message_id, p.source_fingerprint, p.assessment,
         COALESCE((SELECT json_agg(json_build_object('id', f.id, 'kind', f.kind, 'file_name', f.file_name, 'mime_type', f.mime_type, 'file_size', f.file_size)) FROM scout_proposal_files f WHERE f.proposal_id = p.id), '[]'::json) AS attachments
        FROM scout_proposals p ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY p.created_at DESC LIMIT 500`,
       values
@@ -868,12 +997,56 @@ app.post('/api/inbound-email', async (req, res) => {
 
   try {
     const email = normalizeInboundEmail(req.body || {});
+    const extractedBody = extractBestEmailBody(email.text);
+    const intakeSource = email.sourceLabel || classifyInboundSource(email);
+    const intakeConfidence = inferIntakeConfidence(email, extractedBody);
+    const sourceFingerprint = buildSourceFingerprint(email, extractedBody);
+    if (pool) {
+      await databaseReady;
+      const duplicate = await pool.query(
+        `SELECT id, assessment, status, created_at FROM scout_proposals
+         WHERE ($1 <> '' AND inbound_message_id = $1)
+            OR ($2 <> '' AND source_fingerprint = $2)
+         ORDER BY id DESC LIMIT 1`,
+        [email.messageId || '', sourceFingerprint]
+      );
+      if (duplicate.rowCount) {
+        const existing = duplicate.rows[0];
+        const duplicateAssessment = {
+          ...(existing.assessment || {}),
+          duplicate_of_proposal_id: existing.id
+        };
+        return res.status(200).json({
+          ok: true,
+          duplicate: true,
+          email: {
+            from: email.from,
+            subject: email.subject,
+            messageId: email.messageId || ''
+          },
+          assessment: duplicateAssessment,
+          lark_draft: `Duplicate detected for proposal #${existing.id}. Scout skipped a new record because this email appears to match an existing intake.`,
+          lark_delivery: {
+            mode: getInboundAutomationMode(),
+            status: 'skipped_duplicate',
+            note: `Duplicate detected; existing proposal #${existing.id} kept.`
+          }
+        });
+      }
+    }
     const content = buildInboundEmailContent(email);
     const assessment = await runScoutAssessment({
       system: scoutAssessmentSystemPrompt,
       content,
       existingProposalId: 0,
-      previewOnly: false
+      previewOnly: false,
+      proposalMeta: {
+        intakeSource,
+        intakeConfidence,
+        messageId: email.messageId || '',
+        sourceFingerprint,
+        rawAttachments: email.attachments
+      }
     });
 
     const larkDraft = buildAutomationLarkDraft(assessment, email);

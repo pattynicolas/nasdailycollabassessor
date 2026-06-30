@@ -388,8 +388,17 @@
     .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; }
     .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
     .proposal-title { font-size: 16px; font-weight: 650; margin-bottom: 5px; }
+    .proposal-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
     .proposal-meta { color: var(--text-secondary); font-size: 12px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .proposal-summary { color: var(--text-secondary); line-height: 1.55; margin-top: 7px; }
+    .proposal-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+    .meta-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; border: .5px solid var(--border-mid); background: var(--bg-secondary); color: var(--text-secondary); }
+    .meta-badge.source-forwarded-email, .meta-badge.source-auto-scouted { background: var(--bg-info); color: var(--text-info); }
+    .meta-badge.source-manual, .meta-badge.source-direct-email { background: var(--bg-success); color: var(--text-success); }
+    .meta-badge.confidence-high { background: var(--bg-success); color: var(--text-success); }
+    .meta-badge.confidence-medium { background: var(--bg-warning); color: var(--text-warning); }
+    .meta-badge.confidence-low { background: var(--bg-danger); color: var(--text-danger); }
+    .meta-badge.review-needs-human-cleanup { background: var(--bg-danger); color: var(--text-danger); }
     .date-card { min-height: 58px; display: flex; flex-direction: column; justify-content: center; padding: 8px 10px; border-radius: var(--radius); background: var(--bg-info); color: var(--text-info); }
     .date-card strong { color: var(--text); font-size: 13px; line-height: 1.25; }
     .date-card span { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
@@ -1115,10 +1124,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const paymentOptions = ['Pending', 'Paid', 'Pro-Bono'].map(value => `<option${value === proposal.payment_status ? ' selected' : ''}>${value}</option>`).join('');
         const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
         const deleteLabel = escapeHtml(getProposalDeleteLabel(proposal));
+        const sourceBadge = renderMetaBadge(proposal.intake_source || a.intake_source || 'Manual', 'source');
+        const confidenceBadge = renderMetaBadge(proposal.intake_confidence || a.confidence || 'Medium', 'confidence');
+        const reviewBadge = String(a.review_flag || 'Ready') === 'Needs human cleanup' ? renderMetaBadge(a.review_flag, 'review') : '';
         return `<article class="proposal-record record-${getStatusClass(proposal.status)}">
           <div class="record-head">
             <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
-            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
+            <div><div class="proposal-title-row"><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-badges">${sourceBadge}${confidenceBadge}${reviewBadge}</div></div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
             <div class="record-field status-wrap"><label>Status</label>${readOnly ? `<div class="tracker-input">${escapeHtml(proposal.status || 'Pending Details')}</div>` : `<select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select>`}<span class="save-state" id="save-${proposal.id}"></span></div>
             ${readOnly ? '' : `<div class="record-actions">
               <button class="icon-btn" type="button" title="Delete proposal" aria-label="Delete ${deleteLabel}" onclick="deleteProposal(${proposal.id})"><i class="ti ti-trash"></i></button>
@@ -1161,6 +1173,9 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         <div class="assessment-detail">
           <div class="detail-section"><div class="detail-heading">Summary</div><div class="detail-text">${escapeHtml(a.proposal_summary || 'Not stated')}</div></div>
           <div class="detail-section"><div class="detail-facts">
+            <strong>Source</strong><span>${escapeHtml(proposal.intake_source || a.intake_source || 'Manual')}</span>
+            <strong>Confidence</strong><span>${escapeHtml(proposal.intake_confidence || a.confidence || 'Medium')}</span>
+            <strong>Review Status</strong><span>${escapeHtml(a.review_flag || 'Ready')}</span>
             <strong>Requester</strong><span>${escapeHtml(a.requester_name || 'Not stated')}</span>
             <strong>Requester Context</strong><span>${escapeHtml(a.requester_context || 'Not verified')}</span>
             <strong>Timeline</strong><span>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</span>
@@ -1265,6 +1280,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     function getProposalDeleteLabel(proposal) {
       const assessment = proposal?.assessment || {};
       return assessment.proposal_name || assessment.brand || `proposal #${proposal?.id || ''}`.trim();
+    }
+
+    function renderMetaBadge(value, kind) {
+      const text = String(value || '').trim();
+      if (!text) return '';
+      const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      return `<span class="meta-badge ${kind}-${slug}">${escapeHtml(text)}</span>`;
     }
 
     function toggleAgreementFields(id) {
