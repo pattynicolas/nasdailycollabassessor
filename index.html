@@ -62,6 +62,9 @@
     }
 
     .assessor-column { max-width: 640px; margin: 0 auto; }
+    body.database-only .assessor-column { display: none; }
+    body.database-only .container { max-width: 1280px; }
+    body.database-only .database-card { margin-top: 0; }
 
     header {
       margin-bottom: 2rem;
@@ -613,6 +616,7 @@
     let loadedProposals = new Map();
     let updateImages = new Map();
     let pendingProposalUpdate = null;
+    const pageMode = new URLSearchParams(window.location.search).get('view') || '';
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -623,7 +627,13 @@
       attachmentPreviewUrl = '';
     });
 
-    window.addEventListener('load', retryPendingLarkTodo);
+    window.addEventListener('load', () => {
+      if (pageMode === 'database') {
+        document.body.classList.add('database-only');
+        loadProposals();
+      }
+      retryPendingLarkTodo();
+    });
     fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
