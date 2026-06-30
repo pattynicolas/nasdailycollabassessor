@@ -22,6 +22,73 @@ const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand',
 const attachmentSheetHeaders = ['Attachment ID', 'Proposal ID', 'Kind', 'File Name', 'MIME Type', 'File Size', 'Created', 'Data Key'];
 const attachmentDataSheetHeaders = ['Data Key', 'Attachment ID', 'Chunk Index', 'Chunk Count', 'Base64 Chunk'];
 const attachmentBackupChunkSize = 45000;
+const scoutAssessmentSystemPrompt = `You are Scout, Patty's opportunity scout for Nuseir Yassin (Nas Daily / Nas.com). Your personality: sharp-eyed, commercially aware, story-hungry, mission-driven, and allergic to wasted executive time. You spot hidden upside, but you do not hype weak opportunities.
+
+Keep the output extremely simple, executive-friendly, and easy for Nuseir to digest in under 20 seconds.
+
+First classify the opportunity as exactly one of:
+- Collaboration / Content Opportunity
+- Speaking Engagement
+- Partnership Proposal
+- Non-Profit / Cause Initiative
+- Media Opportunity
+- Other
+
+Then evaluate using universal criteria:
+1. Reach: audience, distribution, credibility, media value, or amplification.
+2. Relevance: fit with Nas Daily content, education, storytelling, entrepreneurship, global optimism, creator economy, useful products, or world-scale ideas.
+3. Potential business: revenue, strategic access, sponsors, repeatability, partnership, or material upside.
+4. Time Cost: whether this justifies Nuseir's personal attention. Attention is often scarcer than money.
+5. Requester credibility: whether the person who reached out appears real, relevant, senior enough, and connected to the stated organization.
+
+Requester credibility rules:
+- Identify the person who reached out when possible.
+- Use web search when possible to find LinkedIn/profile/context for that person and confirm they are connected to the organization.
+- If you cannot verify the requester, say so plainly and reduce confidence.
+- Never invent a LinkedIn profile or credential. Use "Not verified" when evidence is missing.
+
+Classification-specific calibration:
+
+For Collaboration / Content Opportunity:
+- Do not judge only by business value.
+- Ask: Is there a compelling Nas Daily story here?
+- Consider human story, educational value, surprising insights, global relevance, viral potential, and access to unique people/places/experiences.
+- Distinguish "could be interesting" from "there is a guaranteed Nas Daily story." If access, characters, filming angle, or global hook are unclear, do not over-score story potential.
+- For pro-bono opportunities, ask: Would Nas Daily want to create content about this even with no commercial benefit?
+- If yes, increase recommendation strength. If no direct business benefit and no guaranteed story, the recommendation should usually be NO.
+- Set type_score_label to "Story Potential".
+
+For Speaking Engagement:
+- Assume Nuseir's standard speaking fee is $50,000 USD.
+- Evaluate fee offered, audience quality, event prestige, strategic access, future business, sponsorship potential, and content opportunities.
+- If fee is below $50,000, do not automatically reject. Ask whether strategic value compensates for the fee gap.
+- Strategic value can include founders, investors, government leaders, enterprise decision makers, potential sponsors, or significant media exposure.
+- Set type_score_label to "Worth Nuseir's Time".
+
+For Partnership Proposal:
+- Evaluate strategic fit with the Nas Daily ecosystem, long-term potential, distribution value, revenue potential, repeatability, and ability to unlock future opportunities.
+- Set type_score_label to "Partnership Potential".
+
+For Non-Profit / Cause Initiative:
+- Evaluate mission alignment rather than revenue.
+- Ask: Does this advance the broader Nas Daily mission?
+- Consider education, human progress, opportunity creation, entrepreneurship, global understanding, and positive impact.
+- Also evaluate organization credibility, ability to execute, storytelling value, and audience relevance.
+- Set type_score_label to "Mission Impact".
+
+For Media Opportunity:
+- Evaluate audience quality, credibility, reach, narrative control, reputational upside/downside, and whether it advances Nuseir's positioning.
+- Set type_score_label to "Media Value".
+
+For Other:
+- Identify the real opportunity logic and set type_score_label to "Opportunity Value".
+
+Final decision philosophy, in order:
+1. Great stories
+2. Strategic leverage
+3. Mission alignment
+4. Revenue and business opportunities
+5. Efficient use of Nuseir's time`;
 
 function groupAttachmentsByProposal(files) {
   const grouped = new Map();
@@ -111,6 +178,282 @@ async function syncGoogleSheet() {
 
 function syncGoogleSheetSoon() {
   setTimeout(() => syncGoogleSheet().catch(error => console.error('Google Sheet backup failed:', error.message)), 0);
+}
+
+function buildAssessmentSchema() {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      brand: { type: 'string' },
+      proposal_name: { type: 'string' },
+      opportunity_type: {
+        type: 'string',
+        enum: [
+          'Collaboration / Content Opportunity',
+          'Speaking Engagement',
+          'Partnership Proposal',
+          'Non-Profit / Cause Initiative',
+          'Media Opportunity',
+          'Other'
+        ]
+      },
+      verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
+      one_line_take: { type: 'string' },
+      decision_reason: { type: 'string' },
+      proposal_summary: { type: 'string' },
+      requester_name: { type: 'string' },
+      requester_context: { type: 'string' },
+      timeline: { type: 'string' },
+      location: { type: 'string' },
+      budget: { type: 'string' },
+      social_links: { type: 'string' },
+      type_score_label: { type: 'string' },
+      type_score: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+      type_score_reason: { type: 'string' },
+      reach_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+      reach_reason: { type: 'string' },
+      relevance_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+      relevance_reason: { type: 'string' },
+      business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+      business_reason: { type: 'string' },
+      credibility_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+      credibility_reason: { type: 'string' },
+      time_cost_score: { type: 'string', enum: ['WORTH IT', 'BORDERLINE', 'NOT WORTH IT'] },
+      time_cost_reason: { type: 'string' },
+      ask: { type: 'string' },
+      next_step: { type: 'string' }
+    },
+    required: [
+      'brand',
+      'proposal_name',
+      'opportunity_type',
+      'verdict',
+      'one_line_take',
+      'decision_reason',
+      'proposal_summary',
+      'requester_name',
+      'requester_context',
+      'timeline',
+      'location',
+      'budget',
+      'social_links',
+      'type_score_label',
+      'type_score',
+      'type_score_reason',
+      'reach_score',
+      'reach_reason',
+      'relevance_score',
+      'relevance_reason',
+      'business_score',
+      'business_reason',
+      'credibility_score',
+      'credibility_reason',
+      'time_cost_score',
+      'time_cost_reason',
+      'ask',
+      'next_step'
+    ]
+  };
+}
+
+function toOpenAIInputContent(content = []) {
+  return content.map(item => {
+    if (item.type === 'text') return { type: 'input_text', text: item.text };
+    if (item.type === 'image' && item.source?.data) {
+      return {
+        type: 'input_image',
+        image_url: `data:${item.source.media_type || 'image/png'};base64,${item.source.data}`
+      };
+    }
+    return null;
+  }).filter(Boolean);
+}
+
+async function runScoutAssessment({ system, content, existingProposalId = 0, previewOnly = false }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('Missing OPENAI_API_KEY in Render environment variables.');
+
+  const openaiResponse = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || 'gpt-4.1',
+      instructions: system,
+      input: [{ role: 'user', content: toOpenAIInputContent(content) }],
+      max_output_tokens: 1600,
+      tools: [{ type: 'web_search' }],
+      tool_choice: 'auto',
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'opportunity_assessment',
+          strict: true,
+          schema: buildAssessmentSchema()
+        }
+      }
+    })
+  });
+
+  const data = await openaiResponse.json();
+  if (!openaiResponse.ok) {
+    throw new Error(data.error?.message || 'OpenAI request failed.');
+  }
+
+  const outputText = data.output_text || (data.output || [])
+    .flatMap(item => item.content || [])
+    .filter(part => part.type === 'output_text')
+    .map(part => part.text)
+    .join('');
+  if (!outputText) throw new Error('OpenAI returned no assessment text.');
+
+  const assessment = JSON.parse(outputText);
+  if (previewOnly) return assessment;
+
+  if (!pool) {
+    assessment.database_warning = 'Assessment completed, but DATABASE_URL is not configured.';
+    return assessment;
+  }
+
+  try {
+    await databaseReady;
+    const rawSourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n');
+    const additionalMarker = 'Additional text:\n';
+    const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : rawSourceText).slice(0, 50000);
+    let saved;
+    if (existingProposalId) {
+      const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
+      if (!current.rowCount) throw new Error('Proposal not found.');
+      const prior = current.rows[0];
+      const mergedSource = [prior.source_text, sourceText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
+      const proposedDate = String(assessment.timeline || '').trim();
+      const proposedLocation = String(assessment.location || '').trim();
+      const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
+      const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
+      saved = await pool.query(
+        `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
+         WHERE id = $5 RETURNING id, created_at, status`,
+        [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
+      );
+    } else {
+      saved = await pool.query(
+        'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
+        [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
+      );
+    }
+
+    let screenshotIndex = 0;
+    for (const item of content.filter(item => item.type === 'image' && item.source?.data)) {
+      const imageData = Buffer.from(item.source.data, 'base64');
+      if (!imageData.length || imageData.length > 10 * 1024 * 1024) continue;
+      screenshotIndex += 1;
+      const mimeType = String(item.source.media_type || 'image/jpeg');
+      const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+      await pool.query(
+        `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+         VALUES ($1, 'source', $2, $3, $4, $5)`,
+        [saved.rows[0].id, `${existingProposalId ? 'proposal-update' : 'proposal-screenshot'}-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
+      );
+    }
+
+    assessment.proposal_record = saved.rows[0];
+    syncGoogleSheetSoon();
+  } catch (databaseError) {
+    console.error('Assessment succeeded but database save failed:', databaseError.message);
+    assessment.database_warning = 'Assessment completed, but it was not saved to the proposal database.';
+  }
+
+  return assessment;
+}
+
+function normalizeInboundEmail(payload) {
+  const from = String(payload.from || payload.sender || '').trim();
+  const subject = String(payload.subject || '').trim();
+  const text = String(payload.text || payload.body || payload.plainText || '').trim();
+  const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
+  if (!from) throw new Error('Inbound email is missing sender.');
+  if (!subject && !text && !attachments.length) throw new Error('Inbound email is empty.');
+  return {
+    from,
+    to: String(payload.to || '').trim(),
+    cc: String(payload.cc || '').trim(),
+    subject: subject || '(No subject)',
+    text,
+    messageId: String(payload.messageId || payload.message_id || '').trim(),
+    attachments: attachments.map(item => ({
+      fileName: String(item.fileName || item.filename || 'attachment').trim(),
+      mimeType: String(item.mimeType || item.contentType || 'application/octet-stream').trim(),
+      data: String(item.data || '').trim()
+    })).filter(item => item.data)
+  };
+}
+
+function buildInboundEmailContent(email) {
+  const headerBlock = [
+    `Scout this forwarded email opportunity for Nuseir.`,
+    ``,
+    `From: ${email.from}`,
+    email.to ? `To: ${email.to}` : '',
+    email.cc ? `CC: ${email.cc}` : '',
+    `Subject: ${email.subject}`,
+    email.messageId ? `Message ID: ${email.messageId}` : '',
+    ``,
+    `Additional text:`,
+    email.text || '(No plain-text body provided.)'
+  ].filter(Boolean).join('\n');
+
+  const content = [{ type: 'text', text: headerBlock }];
+  for (const attachment of email.attachments.filter(item => item.mimeType.startsWith('image/'))) {
+    content.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: attachment.mimeType || 'image/png',
+        data: attachment.data
+      }
+    });
+  }
+  return content;
+}
+
+function getInboundAutomationMode(env = process.env) {
+  return String(env.SCOUT_EMAIL_AUTOMATION_LARK_MODE || 'draft_only').trim().toLowerCase();
+}
+
+function shouldSendInboundAutomationToLark(env = process.env) {
+  return getInboundAutomationMode(env) === 'live';
+}
+
+function isAuthorizedInboundEmail(req) {
+  const secret = process.env.SCOUT_INBOUND_EMAIL_SECRET?.trim();
+  if (!secret) return false;
+  const provided = String(req.headers['x-scout-inbound-secret'] || req.body?.secret || '').trim();
+  return Boolean(provided) && timingSafeEqual(provided, secret);
+}
+
+function buildAutomationLarkDraft(assessment, email) {
+  const title = `${formatOpportunityType(assessment.opportunity_type)}: ${assessment.proposal_name || assessment.brand || email.subject || 'Opportunity'}`;
+  return `${title}
+
+${assessment.proposal_summary || assessment.ask || 'No proposal summary available.'}
+
+From - ${email.from}
+Subject - ${email.subject}
+Requester - ${assessment.requester_name || 'Not stated'}
+Timeline - ${assessment.timeline || 'Not stated'}
+Location - ${assessment.location || 'Not stated'}
+Budget - ${assessment.budget || 'Not stated'}
+
+My Take: ${assessment.verdict || 'MAYBE'}
+
+Why:
+${assessment.decision_reason || assessment.one_line_take || 'Scout did not provide a reason.'}
+
+Next step:
+${assessment.next_step || 'Not stated'}`;
 }
 
 async function initializeDatabase() {
@@ -501,11 +844,6 @@ app.get('/api/lark/oauth/callback', async (req, res) => {
 });
 
 app.post('/api/assess', async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Missing OPENAI_API_KEY in Render environment variables.' });
-  }
-
   try {
     const { system, content, updateProposalId, previewOnly } = req.body || {};
     if (!system || !Array.isArray(content)) {
@@ -516,191 +854,61 @@ app.post('/api/assess', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized. Updating existing proposals is restricted to Patty.' });
     }
 
-    const inputContent = content.map(item => {
-      if (item.type === 'text') {
-        return { type: 'input_text', text: item.text };
-      }
-
-      if (item.type === 'image' && item.source?.data) {
-        return {
-          type: 'input_image',
-          image_url: `data:${item.source.media_type || 'image/png'};base64,${item.source.data}`
-        };
-      }
-
-      return null;
-    }).filter(Boolean);
-
-    const openaiResponse = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-4.1',
-        instructions: system,
-        input: [{ role: 'user', content: inputContent }],
-        max_output_tokens: 1600,
-        tools: [{ type: 'web_search' }],
-        tool_choice: 'auto',
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'opportunity_assessment',
-            strict: true,
-            schema: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                brand: { type: 'string' },
-                proposal_name: { type: 'string' },
-                opportunity_type: {
-                  type: 'string',
-                  enum: [
-                    'Collaboration / Content Opportunity',
-                    'Speaking Engagement',
-                    'Partnership Proposal',
-                    'Non-Profit / Cause Initiative',
-                    'Media Opportunity',
-                    'Other'
-                  ]
-                },
-                verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
-                one_line_take: { type: 'string' },
-                decision_reason: { type: 'string' },
-                proposal_summary: { type: 'string' },
-                requester_name: { type: 'string' },
-                requester_context: { type: 'string' },
-                timeline: { type: 'string' },
-                location: { type: 'string' },
-                budget: { type: 'string' },
-                social_links: { type: 'string' },
-                type_score_label: { type: 'string' },
-                type_score: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
-                type_score_reason: { type: 'string' },
-                reach_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                reach_reason: { type: 'string' },
-                relevance_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                relevance_reason: { type: 'string' },
-                business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                business_reason: { type: 'string' },
-                credibility_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                credibility_reason: { type: 'string' },
-                time_cost_score: { type: 'string', enum: ['WORTH IT', 'BORDERLINE', 'NOT WORTH IT'] },
-                time_cost_reason: { type: 'string' },
-                ask: { type: 'string' },
-                next_step: { type: 'string' }
-              },
-              required: [
-                'brand',
-                'proposal_name',
-                'opportunity_type',
-                'verdict',
-                'one_line_take',
-                'decision_reason',
-                'proposal_summary',
-                'requester_name',
-                'requester_context',
-                'timeline',
-                'location',
-                'budget',
-                'social_links',
-                'type_score_label',
-                'type_score',
-                'type_score_reason',
-                'reach_score',
-                'reach_reason',
-                'relevance_score',
-                'relevance_reason',
-                'business_score',
-                'business_reason',
-                'credibility_score',
-                'credibility_reason',
-                'time_cost_score',
-                'time_cost_reason',
-                'ask',
-                'next_step'
-              ]
-            }
-          }
-        }
-      })
-    });
-
-    const data = await openaiResponse.json();
-    if (!openaiResponse.ok) {
-      return res.status(openaiResponse.status).json({
-        error: data.error?.message || 'OpenAI request failed.'
-      });
-    }
-
-    const outputText = data.output_text || (data.output || [])
-      .flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text')
-      .map(part => part.text)
-      .join('');
-
-    if (!outputText) {
-      return res.status(500).json({ error: 'OpenAI returned no assessment text.' });
-    }
-
-    const assessment = JSON.parse(outputText);
-    if (previewOnly) {
-      return res.status(200).json(assessment);
-    }
-    if (pool) {
-      try {
-        await databaseReady;
-        const rawSourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n');
-        const additionalMarker = 'Additional text:\n';
-        const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : '').slice(0, 50000);
-        let saved;
-        if (existingProposalId) {
-          const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
-          if (!current.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
-          const prior = current.rows[0];
-          const mergedSource = [prior.source_text, sourceText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
-          const proposedDate = String(assessment.timeline || '').trim();
-          const proposedLocation = String(assessment.location || '').trim();
-          const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
-          const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
-          saved = await pool.query(
-            `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
-             WHERE id = $5 RETURNING id, created_at, status`,
-            [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
-          );
-        } else {
-          saved = await pool.query(
-            'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
-            [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
-          );
-        }
-        let screenshotIndex = 0;
-        for (const item of content.filter(item => item.type === 'image' && item.source?.data)) {
-          const imageData = Buffer.from(item.source.data, 'base64');
-          if (!imageData.length || imageData.length > 10 * 1024 * 1024) continue;
-          screenshotIndex += 1;
-          const mimeType = String(item.source.media_type || 'image/jpeg');
-          const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
-          await pool.query(
-            `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
-             VALUES ($1, 'source', $2, $3, $4, $5)`,
-            [saved.rows[0].id, `${existingProposalId ? 'proposal-update' : 'proposal-screenshot'}-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
-          );
-        }
-        assessment.proposal_record = saved.rows[0];
-        syncGoogleSheetSoon();
-      } catch (databaseError) {
-        console.error('Assessment succeeded but database save failed:', databaseError.message);
-        assessment.database_warning = 'Assessment completed, but it was not saved to the proposal database.';
-      }
-    } else {
-      assessment.database_warning = 'Assessment completed, but DATABASE_URL is not configured.';
-    }
+    const assessment = await runScoutAssessment({ system, content, existingProposalId, previewOnly });
     return res.status(200).json(assessment);
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Assessment failed.' });
+  }
+});
+
+app.post('/api/inbound-email', async (req, res) => {
+  if (!isAuthorizedInboundEmail(req)) {
+    return res.status(403).json({ error: 'Not authorized. Invalid inbound email secret.' });
+  }
+
+  try {
+    const email = normalizeInboundEmail(req.body || {});
+    const content = buildInboundEmailContent(email);
+    const assessment = await runScoutAssessment({
+      system: scoutAssessmentSystemPrompt,
+      content,
+      existingProposalId: 0,
+      previewOnly: false
+    });
+
+    const larkDraft = buildAutomationLarkDraft(assessment, email);
+    const deliveryMode = getInboundAutomationMode();
+    let larkDelivery = { mode: deliveryMode, status: 'skipped' };
+
+    if (shouldSendInboundAutomationToLark()) {
+      const liveResult = await sendLarkInteractiveMessage({
+        message: larkDraft,
+        assessment,
+        receiveId: process.env.SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID?.trim(),
+        receiveIdType: process.env.SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID_TYPE?.trim() || 'chat_id'
+      });
+      larkDelivery = { mode: deliveryMode, status: 'sent', ...liveResult };
+    } else {
+      larkDelivery = {
+        mode: deliveryMode,
+        status: 'draft_only',
+        note: 'Lark delivery skipped because SCOUT_EMAIL_AUTOMATION_LARK_MODE is not set to live.'
+      };
+    }
+
+    return res.status(200).json({
+      ok: true,
+      email: {
+        from: email.from,
+        subject: email.subject,
+        messageId: email.messageId || ''
+      },
+      assessment,
+      lark_draft: larkDraft,
+      lark_delivery: larkDelivery
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not process inbound email.' });
   }
 });
 
@@ -816,48 +1024,13 @@ app.post('/api/lark/message', async (req, res) => {
     return res.status(403).json({ error: 'Not authorized. This action is restricted to Patty.' });
   }
 
-  const receiveId = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
-    || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
-  const receiveIdType = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE?.trim()
-    || (process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim() ? 'email' : 'open_id');
-
-  if (!receiveId) {
-    return res.status(500).json({
-      error: 'Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL in Render, or add COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE.'
-    });
-  }
-
   try {
     const { message, assessment } = req.body || {};
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Missing message draft.' });
     }
-
-    const token = await getLarkTenantAccessToken();
-    const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(receiveIdType)}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        receive_id: receiveId,
-        msg_type: 'interactive',
-        content: JSON.stringify(assessment
-          ? buildScoutAssessmentCard(assessment, String(message).trim())
-          : buildLarkCardContent(String(message).trim()))
-      })
-    });
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok || data.code) {
-      return res.status(response.ok ? 500 : response.status).json({
-        error: data.msg || data.error?.message || 'Could not send Lark message.',
-        details: data
-      });
-    }
-
-    return res.status(200).json({ ok: true, message_id: data.data?.message_id, data });
+    const result = await sendLarkInteractiveMessage({ message: String(message).trim(), assessment });
+    return res.status(200).json({ ok: true, ...result });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
   }
@@ -1042,6 +1215,40 @@ function linkifyLarkLine(line) {
   }
 
   return parts.length ? parts : [{ tag: 'text', text: line }];
+}
+
+async function sendLarkInteractiveMessage({ message, assessment, receiveId, receiveIdType }) {
+  const resolvedReceiveId = receiveId
+    || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
+    || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
+  const resolvedReceiveIdType = receiveIdType
+    || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE?.trim()
+    || (process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim() ? 'email' : 'open_id');
+
+  if (!resolvedReceiveId) {
+    throw new Error('Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL in Render, or add COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE.');
+  }
+
+  const token = await getLarkTenantAccessToken();
+  const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(resolvedReceiveIdType)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      receive_id: resolvedReceiveId,
+      msg_type: 'interactive',
+      content: JSON.stringify(assessment
+        ? buildScoutAssessmentCard(assessment, String(message).trim())
+        : buildLarkCardContent(String(message).trim()))
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.code) {
+    throw new Error(data.msg || data.error?.message || 'Could not send Lark message.');
+  }
+  return { message_id: data.data?.message_id, data };
 }
 
 app.get('/api/lark/chats', async (_req, res) => {
