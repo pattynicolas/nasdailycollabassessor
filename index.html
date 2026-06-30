@@ -411,6 +411,7 @@
     .detail-text { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
     .detail-facts { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 12px; line-height: 1.5; }
     .detail-facts strong { color: var(--text-secondary); }
+    .inline-detail-input { width: 100%; border: 0.5px solid var(--border-mid); border-radius: var(--radius); background: var(--bg-secondary); color: var(--text); font: inherit; font-size: 12px; padding: 7px 8px; }
     .original-heading { margin-top: 4px; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
     .original-text { white-space: pre-wrap; padding: 10px 12px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-secondary); font-size: 12px; line-height: 1.55; max-height: 260px; overflow: auto; }
     .source-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
@@ -461,6 +462,12 @@
     .status-guide { margin-top: 12px; border: .5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .status-guide summary { cursor: pointer; font-size: 13px; font-weight: 600; }
     .status-guide-grid { display: grid; grid-template-columns: 180px 1fr; gap: 7px 12px; margin-top: 10px; font-size: 12px; line-height: 1.45; }
+    .summary-dialog { width: min(860px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: var(--radius); box-shadow: 0 24px 70px rgba(0,0,0,.25); background: var(--bg); }
+    .summary-dialog::backdrop { background: rgba(20, 24, 28, .55); }
+    .summary-shell { display: grid; grid-template-rows: auto 1fr; max-height: min(760px, calc(100vh - 32px)); }
+    .summary-body { padding: 16px; display: grid; gap: 12px; }
+    .summary-body textarea { width: 100%; min-height: 360px; font: inherit; color: var(--text); background: var(--bg-secondary); border: .5px solid var(--border); border-radius: var(--radius); padding: 12px; resize: vertical; }
+    .summary-hint { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
     @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid, .update-confirm-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
   </style>
 </head>
@@ -513,6 +520,7 @@
           <summary><i class="ti ti-info-circle"></i> What each status means</summary>
           <div class="status-guide-grid">
             <strong>Pending Details</strong><span>We replied and need more information before approving or rejecting.</span>
+            <strong>Pending Nuseir</strong><span>We have enough context and are waiting for Nuseir’s decision or reaction.</span>
             <strong>Agreed; Pending Contract</strong><span>Nuseir said yes. We are waiting for the agreement to be finalized and signed.</span>
             <strong>Rejected</strong><span>We declined the opportunity.</span>
             <strong>Contract Signed</strong><span>The agreement is signed; delivery or the event is still pending.</span>
@@ -522,6 +530,7 @@
         <div class="database-toolbar">
           <input id="proposal-search" type="search" placeholder="Search brand, proposal, requester, or notes" oninput="scheduleProposalLoad()" />
           <select id="proposal-filter" onchange="loadProposals(false)"><option>All</option></select>
+          <button class="copy-btn" onclick="openNuseirSummaryDialog()"><i class="ti ti-message-chatbot"></i> Summarize for Nuseir</button>
           <button class="copy-btn" onclick="downloadProposalCsv()"><i class="ti ti-download"></i> Download CSV</button>
           <button class="copy-btn" onclick="downloadFullBackup()" title="Includes every proposal, screenshot, contract, and invoice"><i class="ti ti-database-export"></i> Full backup</button>
           <button class="copy-btn" onclick="syncGoogleSheetBackup(event)" title="Refresh the Google Sheet backup"><i class="ti ti-brand-google-drive"></i> Sync Google Sheet</button>
@@ -575,7 +584,24 @@
     </div>
   </dialog>
 
+  <dialog class="summary-dialog" id="nuseir-summary-dialog">
+    <div class="summary-shell">
+      <div class="attachment-viewer-head">
+        <div class="attachment-viewer-title">Pending Nuseir summary</div>
+        <div class="attachment-viewer-actions">
+          <button class="copy-btn" type="button" onclick="copyNuseirSummary()"><i class="ti ti-copy"></i> Copy summary</button>
+          <button class="icon-btn" type="button" title="Close" onclick="closeNuseirSummaryDialog()"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="summary-body">
+        <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong>. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
+        <textarea id="nuseir-summary-output" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </dialog>
+
   <script>
+    const pendingNuseirStatus = 'Pending Nuseir';
     const images = [];
     let lastLarkMessage = '';
     let lastAssessment = null;
@@ -960,6 +986,38 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return parts.length ? parts.join(' ') : 'Scout found limited evidence that this opportunity justifies Nuseir’s time.';
     }
 
+    function buildNuseirSummary() {
+      const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
+      if (!pending.length) {
+        return `Pending Nuseir decisions\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
+      }
+      const lines = [
+        'Pending Nuseir decisions',
+        '',
+        `${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
+        ''
+      ];
+      for (const proposal of pending.sort(compareProposalDates)) {
+        const assessment = proposal.assessment || {};
+        const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
+        const nextStep = String(assessment.next_step || '').trim();
+        const ask = String(assessment.ask || '').trim();
+        const need = nextStep && !/not stated/i.test(nextStep)
+          ? nextStep
+          : ask && !/not stated/i.test(ask)
+            ? `Decide on: ${ask}`
+            : 'Review and share go / no-go / questions.';
+        const reason = String(assessment.decision_reason || assessment.one_line_take || assessment.proposal_summary || '').trim() || 'Worth a quick read before deciding.';
+        const timeline = String(proposal.event_date || assessment.timeline || '').trim();
+        lines.push(`• ${title}`);
+        lines.push(`Need: ${need}`);
+        lines.push(`Why it matters: ${reason}`);
+        lines.push(`Timeline: ${timeline && !/not stated|unknown|tbd|flexible/i.test(timeline) ? timeline : 'No clear deadline stated.'}`);
+        lines.push('');
+      }
+      return lines.join('\n').trim();
+    }
+
     async function copyLarkMessage() {
       const btn = document.querySelector('.copy-btn');
       try {
@@ -1033,7 +1091,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       sourcePreviewUrls = [];
       rows.innerHTML = sortedProposals.map(proposal => {
         const a = proposal.assessment || {};
-        const statusOptions = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
+        const statusOptions = ['Pending Details', pendingNuseirStatus, 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
           .map(status => `<option${status === proposal.status ? ' selected' : ''}>${status}</option>`).join('');
         const typeOptions = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other']
           .map(type => `<option${type === a.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
@@ -1078,6 +1136,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const a = proposal.assessment || {};
       const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
       const text = cleanSourceText(proposal.source_text);
+      const locationValue = escapeHtml(proposal.location || a.location || '');
       const original = sourceFiles.length || text
         ? `${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}${text ? `<div class="original-text">${escapeHtml(text)}</div>` : ''}`
         : '<div class="original-text">Original screenshots or pasted text were not stored for this historical record. Add them with the pencil button.</div>';
@@ -1088,6 +1147,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             <strong>Requester</strong><span>${escapeHtml(a.requester_name || 'Not stated')}</span>
             <strong>Requester Context</strong><span>${escapeHtml(a.requester_context || 'Not verified')}</span>
             <strong>Timeline</strong><span>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</span>
+            <strong>Location</strong><input class="inline-detail-input" value="${locationValue}" placeholder="Not stated" onblur="saveProposalLocation(${proposal.id}, this.value)">
             <strong>Budget</strong><span>${escapeHtml(a.budget || 'Not stated')}</span>
             <strong>Website/Social Links</strong><span>${linkifyText(a.social_links || 'Not stated')}</span>
           </div></div>
@@ -1505,6 +1565,34 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         await loadProposals(false);
       } catch (error) {
         alert(error.message || 'Could not delete proposal.');
+      }
+    }
+
+    async function saveProposalLocation(id, value) {
+      const editorInput = document.getElementById(`location-${id}`);
+      if (editorInput) editorInput.value = value;
+      await saveProposal(id);
+    }
+
+    function openNuseirSummaryDialog() {
+      const output = document.getElementById('nuseir-summary-output');
+      output.value = buildNuseirSummary();
+      document.getElementById('nuseir-summary-dialog').showModal();
+    }
+
+    function closeNuseirSummaryDialog() {
+      const dialog = document.getElementById('nuseir-summary-dialog');
+      if (dialog.open) dialog.close();
+    }
+
+    async function copyNuseirSummary() {
+      const output = document.getElementById('nuseir-summary-output');
+      output.focus();
+      output.select();
+      try {
+        await navigator.clipboard.writeText(output.value);
+      } catch {
+        document.execCommand('copy');
       }
     }
 
