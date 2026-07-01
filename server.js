@@ -1000,6 +1000,59 @@ app.get('/api/lark/oauth/callback', async (req, res) => {
   }
 });
 
+app.get('/api/lark/user-lookup', async (req, res) => {
+  try {
+    const query = String(req.query.email || req.query.query || '').trim();
+    if (!query) {
+      return res.status(400).json({ error: 'Missing email or query parameter.' });
+    }
+
+    const userSession = getLarkUserSession(req);
+    if (!userSession?.accessToken) {
+      return res.status(401).json({
+        error: 'Please connect Lark first.',
+        needs_lark_login: true,
+        auth_url: '/api/lark/oauth/start'
+      });
+    }
+
+    const lookupUrl = new URL('https://open.larksuite.com/open-apis/search/v1/user');
+    lookupUrl.searchParams.set('query', query);
+    lookupUrl.searchParams.set('page_size', '20');
+
+    const response = await fetch(lookupUrl, {
+      headers: {
+        'Authorization': `Bearer ${userSession.accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || data.code) {
+      return res.status(502).json({
+        error: data.msg || data.error || 'Could not search Lark users.'
+      });
+    }
+
+    const users = Array.isArray(data?.data?.user_list) ? data.data.user_list : [];
+    return res.json({
+      ok: true,
+      query,
+      users: users.map((user) => ({
+        name: user.name || user.en_name || user.display_name || null,
+        email: user.email || null,
+        user_id: user.user_id || null,
+        open_id: user.open_id || null,
+        union_id: user.union_id || null
+      }))
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: error.message || 'Could not search Lark users.'
+    });
+  }
+});
+
 app.post('/api/assess', async (req, res) => {
   try {
     const { system, content, updateProposalId, previewOnly } = req.body || {};
