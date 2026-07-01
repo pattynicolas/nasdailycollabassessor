@@ -183,6 +183,12 @@ function buildProposalPermalink(baseUrl, proposalId) {
   return `${baseUrl}/?view=database&proposal=${encodeURIComponent(proposalId)}`;
 }
 
+function getBestProposalLink(proposal, baseUrl = '') {
+  const larkMessageLink = String(proposal?.lark_message_link || '').trim();
+  if (larkMessageLink) return larkMessageLink;
+  return buildProposalPermalink(baseUrl, proposal?.id);
+}
+
 function groupAttachmentsByProposal(files) {
   const grouped = new Map();
   for (const file of files) {
@@ -617,6 +623,7 @@ async function initializeDatabase() {
     ADD COLUMN IF NOT EXISTS source_fingerprint TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS lark_chat_id TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS lark_message_id TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS lark_message_link TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS last_lark_sent_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'Pending Details'`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS scout_proposals_inbound_message_id_idx
@@ -688,7 +695,7 @@ app.get('/api/proposals', requireDatabaseRead, async (req, res) => {
     const result = await pool.query(
       `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location, p.source_text,
         p.payment_status, p.commission_breakdown, p.intake_source, p.intake_confidence, p.inbound_message_id, p.source_fingerprint,
-        p.lark_chat_id, p.lark_message_id, p.last_lark_sent_at, p.assessment,
+        p.lark_chat_id, p.lark_message_id, p.lark_message_link, p.last_lark_sent_at, p.assessment,
         COALESCE((SELECT json_agg(json_build_object('id', f.id, 'kind', f.kind, 'file_name', f.file_name, 'mime_type', f.mime_type, 'file_size', f.file_size)) FROM scout_proposal_files f WHERE f.proposal_id = p.id), '[]'::json) AS attachments
        FROM scout_proposals p ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY p.created_at DESC LIMIT 500`,
       values
@@ -712,6 +719,7 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     const paymentStatus = String(req.body?.paymentStatus || 'Pending').trim();
     const commissionBreakdown = String(req.body?.commissionBreakdown || '');
     const sourceText = String(req.body?.sourceText || '');
+    const larkMessageLink = String(req.body?.larkMessageLink || '').trim();
     if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid proposal ID.' });
     if (!proposalStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
     if (!opportunityTypes.includes(type)) return res.status(400).json({ error: 'Invalid opportunity type.' });
@@ -719,9 +727,10 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     const result = await pool.query(
       `UPDATE scout_proposals SET status = $1, notes = $2, event_date = $3, location = $4,
        payment_status = $5, commission_breakdown = $6,
-       source_text = $7, assessment = assessment || jsonb_build_object('opportunity_type', $8::text, 'budget', $9::text), updated_at = NOW()
-       WHERE id = $10 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, source_text, assessment`,
-      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), sourceText.slice(0, 50000), type, budget.slice(0, 500), id]
+       source_text = $7, lark_message_link = $8,
+       assessment = assessment || jsonb_build_object('opportunity_type', $9::text, 'budget', $10::text), updated_at = NOW()
+       WHERE id = $11 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, source_text, lark_message_link, assessment`,
+      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), sourceText.slice(0, 50000), larkMessageLink.slice(0, 2000), type, budget.slice(0, 500), id]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
     syncGoogleSheetSoon();
@@ -1241,7 +1250,8 @@ app.post('/api/nuseir-digest/test', async (req, res) => {
     await databaseReady;
     const result = await pool.query(
       `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location, p.source_text,
-        p.payment_status, p.commission_breakdown, p.intake_source, p.intake_confidence, p.inbound_message_id, p.source_fingerprint, p.assessment
+        p.payment_status, p.commission_breakdown, p.intake_source, p.intake_confidence, p.inbound_message_id, p.source_fingerprint,
+        p.lark_message_link, p.assessment
        FROM scout_proposals p
        WHERE p.status = $1
        ORDER BY p.created_at DESC
@@ -1253,7 +1263,7 @@ app.post('/api/nuseir-digest/test', async (req, res) => {
     const baseUrl = getPublicAppBaseUrl(req);
     const summary = buildNuseirSummary(proposals, {
       linkForProposal(proposal) {
-        return buildProposalPermalink(baseUrl, proposal?.id);
+        return getBestProposalLink(proposal, baseUrl);
       }
     });
     const receiveId = process.env.SCOUT_NUSEIR_DIGEST_TEST_RECEIVE_ID?.trim()

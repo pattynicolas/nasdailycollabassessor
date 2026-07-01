@@ -1014,6 +1014,20 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return `${window.location.origin}/?view=database&proposal=${encodeURIComponent(id)}`;
     }
 
+    function buildBestProposalLink(proposal) {
+      const larkMessageLink = String(proposal?.lark_message_link || '').trim();
+      if (larkMessageLink) return larkMessageLink;
+      return buildProposalPermalink(proposal?.id);
+    }
+
+    function isUrgentProposal(proposal) {
+      const timestamp = parseEngagementDate(proposal.event_date || proposal.assessment?.timeline);
+      if (timestamp === Number.MAX_SAFE_INTEGER) return false;
+      const dayMs = 24 * 60 * 60 * 1000;
+      const diffDays = Math.ceil((timestamp - Date.now()) / dayMs);
+      return diffDays <= 3;
+    }
+
     function buildNuseirSummary() {
       const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
       if (!pending.length) {
@@ -1025,24 +1039,16 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         `${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
         ''
       ];
-      for (const proposal of pending.sort(compareProposalDates)) {
+      const sortedPending = [...pending].sort((a, b) => {
+        const urgentDiff = Number(isUrgentProposal(b)) - Number(isUrgentProposal(a));
+        if (urgentDiff !== 0) return urgentDiff;
+        return compareProposalDates(a, b);
+      });
+      for (const proposal of sortedPending) {
         const assessment = proposal.assessment || {};
         const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
-        const titleLine = `• **[${title}](${buildProposalPermalink(proposal.id)})**`;
-        const nextStep = String(assessment.next_step || '').trim();
-        const ask = String(assessment.ask || '').trim();
-        const need = nextStep && !/not stated/i.test(nextStep)
-          ? nextStep
-          : ask && !/not stated/i.test(ask)
-            ? `Decide on: ${ask}`
-            : 'Review and share go / no-go / questions.';
-        const reason = String(assessment.decision_reason || assessment.one_line_take || assessment.proposal_summary || '').trim() || 'Worth a quick read before deciding.';
-        const timeline = String(proposal.event_date || assessment.timeline || '').trim();
-        lines.push(titleLine);
-        lines.push(`Need: ${need}`);
-        lines.push(`Why it matters: ${reason}`);
-        lines.push(`Timeline: ${timeline && !/not stated|unknown|tbd|flexible/i.test(timeline) ? timeline : 'No clear deadline stated.'}`);
-        lines.push('');
+        const prefix = isUrgentProposal(proposal) ? '• 🔴 Urgent ' : '• ';
+        lines.push(`${prefix}**[${title}](${buildBestProposalLink(proposal)})**`);
       }
       return lines.join('\n').trim();
     }
@@ -1153,6 +1159,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
             <div class="record-field"><label>Engagement Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onchange="saveProposal(${proposal.id}, true)"></div>
             <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
+            <div class="record-field"><label>Lark message link</label><input class="tracker-input" id="lark-link-${proposal.id}" value="${escapeHtml(proposal.lark_message_link || '')}" placeholder="Paste Lark card URL" onblur="saveProposal(${proposal.id})"></div>
           </div>
           <hr class="editor-divider"><div class="proposal-detail-grid">
           <div><div class="field-label"><i class="ti ti-sparkles"></i> Update with Scout</div><textarea class="proposal-notes" id="update-text-${proposal.id}" placeholder="Paste the new email, WhatsApp message, fee, date, or other update..." onpaste="handleUpdatePaste(event, ${proposal.id})"></textarea><div class="update-preview-grid" id="update-preview-${proposal.id}"></div><div class="attachment-row"><input type="file" id="update-files-${proposal.id}" accept="image/*" multiple onchange="handleUpdateFiles(${proposal.id}, this.files)"><button class="copy-btn" type="button" onclick="processProposalUpdate(${proposal.id}, event)"><i class="ti ti-sparkles"></i> Read & preview changes</button></div><div class="field-label" style="margin-top:18px"><i class="ti ti-file-description"></i> Original proposal & update history</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
@@ -1334,6 +1341,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             budget: document.getElementById(`budget-${id}`).value,
             eventDate: document.getElementById(`date-${id}`).value,
             location: document.getElementById(`location-${id}`).value,
+            larkMessageLink: document.getElementById(`lark-link-${id}`)?.value || '',
             paymentStatus: document.getElementById(`payment-${id}`)?.value || 'Pending',
             commissionBreakdown: document.getElementById(`commission-${id}`)?.value || '',
             sourceText: document.getElementById(`source-text-${id}`)?.value || ''
