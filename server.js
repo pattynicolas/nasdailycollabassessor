@@ -1282,8 +1282,8 @@ app.post('/api/nuseir-digest/test', async (req, res) => {
     }
 
     const intro = proposals.length
-      ? `Scout test digest for Nuseir\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`
-      : `Scout test digest for Nuseir\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`;
+      ? `Pending Nuseir's Decision\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`
+      : `Pending Nuseir's Decision\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`;
     const sendResult = await sendLarkInteractiveMessage({
       message: intro,
       receiveId,

@@ -600,7 +600,7 @@
   <dialog class="summary-dialog" id="nuseir-summary-dialog">
     <div class="summary-shell">
       <div class="attachment-viewer-head">
-        <div class="attachment-viewer-title">Needs Nuseir’s decision</div>
+        <div class="attachment-viewer-title">Pending Nuseir's Decision</div>
         <div class="attachment-viewer-actions">
           <button class="copy-btn" type="button" onclick="copyNuseirSummary()"><i class="ti ti-copy"></i> Copy summary</button>
           <button class="copy-btn" id="send-test-digest-btn" type="button" onclick="sendTestNuseirDigest()"><i class="ti ti-send"></i> Send test to Lark</button>
@@ -1030,14 +1030,14 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function buildNuseirSummary() {
       const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
-      const footer = `\n\nFull funnel: [Open Scout database](https://nasdailycollabassessor.onrender.com/?view=database)\nPassword: NasMeansPeople`;
+      const footer = `\n\n[View all active proposals here](https://nasdailycollabassessor.onrender.com/?view=database)\nPassword: NasMeansPeople`;
       if (!pending.length) {
-        return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".${footer}`;
+        return `Pending Nuseir's Decision\n\nHey Nuseir! No proposals are currently marked "${pendingNuseirStatus}".${footer}`;
       }
       const lines = [
-        'Needs Nuseir’s decision',
+        "Pending Nuseir's Decision",
         '',
-        `${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
+        `Hey Nuseir! ${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
         ''
       ];
       const sortedPending = [...pending].sort((a, b) => {

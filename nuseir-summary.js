@@ -62,15 +62,15 @@ function formatProposalTitle(proposal, options = {}) {
 
 export function buildNuseirSummary(proposals = [], options = {}) {
   const pending = proposals.filter(proposal => String(proposal?.status || '').trim() === pendingNuseirStatus);
-  const footer = `\n\nFull funnel: [Open Scout database](${funnelUrl})\nPassword: ${funnelPassword}`;
+  const footer = `\n\n[View all active proposals here](${funnelUrl})\nPassword: ${funnelPassword}`;
   if (!pending.length) {
-    return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".${footer}`;
+    return `Pending Nuseir's Decision\n\nHey Nuseir! No proposals are currently marked "${pendingNuseirStatus}".${footer}`;
   }
 
   const lines = [
-    'Needs Nuseir’s decision',
+    "Pending Nuseir's Decision",
     '',
-    `${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
+    `Hey Nuseir! ${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
     ''
   ];
 
