@@ -64,12 +64,10 @@ export function buildNuseirSummary(proposals = [], options = {}) {
   const pending = proposals.filter(proposal => String(proposal?.status || '').trim() === pendingNuseirStatus);
   const footer = `\n\n[View all active proposals here](${funnelUrl})\nPassword: ${funnelPassword}`;
   if (!pending.length) {
-    return `Pending Nuseir's Decision\n\nHey Nuseir! No proposals are currently marked "${pendingNuseirStatus}".${footer}`;
+    return `Hey Nuseir! No proposals are currently marked "${pendingNuseirStatus}".${footer}`;
   }
 
   const lines = [
-    "Pending Nuseir's Decision",
-    '',
     `Hey Nuseir! ${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
     ''
   ];

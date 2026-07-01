@@ -1358,9 +1358,7 @@ app.post('/api/nuseir-digest/test', async (req, res) => {
       });
     }
 
-    const intro = proposals.length
-      ? `Pending Nuseir's Decision\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`
-      : `Pending Nuseir's Decision\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`;
+    const intro = `Pending Nuseir's Decision\n\n${summary}`;
     const sendResult = await sendLarkInteractiveMessage({
       message: intro,
       receiveId,
@@ -1536,6 +1534,12 @@ function getMessageBody(message) {
   return lines.join('\n').trim();
 }
 
+function extractPendingProposalCount(message) {
+  const body = getMessageBody(message);
+  const match = body.match(/Hey Nuseir!\s+(\d+)\s+proposal/i);
+  return match ? Number(match[1]) : null;
+}
+
 function buildLarkPostContent(message) {
   const lines = message.split(/\r?\n/);
   const title = lines.shift() || 'Scout Opportunity';
@@ -1596,10 +1600,11 @@ async function sendLarkInteractiveMessage({ message, assessment, receiveId, rece
   const mentionUserId = resolvedReceiveIdType === 'chat_id'
     ? (process.env.COLLAB_ASSESSOR_LARK_NOTIFY_USER_ID?.trim() || '')
     : '';
+  const pendingProposalCount = !assessment ? extractPendingProposalCount(String(message).trim()) : null;
   const mentionInstruction = resolvedReceiveIdType === 'chat_id'
     ? (assessment
         ? 'reply on this thread to keep all conversations clean!'
-        : 'click on each item and reply on the thread')
+        : `click on each item and reply on the thread.${pendingProposalCount != null ? ` There are ${pendingProposalCount} proposal${pendingProposalCount === 1 ? '' : 's'} waiting on your thoughts.` : ''}`)
     : '';
 
   const token = await getLarkTenantAccessToken();
