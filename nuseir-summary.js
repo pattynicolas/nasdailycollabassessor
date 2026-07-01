@@ -36,46 +36,52 @@ function parseTimelineDate(proposal) {
   return Number.isNaN(timestamp) ? null : new Date(timestamp);
 }
 
-function getUrgencyTag(proposal, options = {}) {
+function isUrgent(proposal, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date();
   const target = parseTimelineDate(proposal);
-  if (!target) return '⚪ No deadline';
+  if (!target) return false;
   const dayMs = 24 * 60 * 60 * 1000;
   const diffDays = Math.ceil((target.getTime() - now.getTime()) / dayMs);
-  if (diffDays <= 3) return '🔴 Urgent';
-  if (diffDays <= 7) return '🟠 This week';
-  return '🟢 Upcoming';
+  return diffDays <= 3;
+}
+
+function urgencyRank(proposal, options = {}) {
+  return isUrgent(proposal, options) ? 0 : 1;
 }
 
 function formatProposalTitle(proposal, options = {}) {
   const assessment = proposal?.assessment || {};
   const title = cleanText(assessment.proposal_name || assessment.brand, `Proposal #${proposal.id}`);
   const link = typeof options.linkForProposal === 'function' ? options.linkForProposal(proposal) : '';
-  const urgency = getUrgencyTag(proposal, options);
-  if (link) return `• ${urgency} **[${title}](${link})**`;
-  return `• ${urgency} **${title}**`;
+  const prefix = isUrgent(proposal, options) ? '• 🔴 Urgent ' : '• ';
+  if (link) return `${prefix}**[${title}](${link})**`;
+  return `${prefix}**${title}**`;
 }
 
 export function buildNuseirSummary(proposals = [], options = {}) {
   const pending = proposals.filter(proposal => String(proposal?.status || '').trim() === pendingNuseirStatus);
   if (!pending.length) {
-    return `Pending Nuseir decisions\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
+    return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
   }
 
   const lines = [
-    'Pending Nuseir decisions',
+    'Needs Nuseir’s decision',
     '',
     `${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
     ''
   ];
 
-  for (const proposal of pending) {
-    const assessment = proposal?.assessment || {};
+  const ordered = [...pending].sort((a, b) => {
+    const urgencyDiff = urgencyRank(a, options) - urgencyRank(b, options);
+    if (urgencyDiff !== 0) return urgencyDiff;
+    const dateA = parseTimelineDate(a)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const dateB = parseTimelineDate(b)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    if (dateA !== dateB) return dateA - dateB;
+    return Number(a?.id || 0) - Number(b?.id || 0);
+  });
+
+  for (const proposal of ordered) {
     lines.push(formatProposalTitle(proposal, options));
-    lines.push(`Need: ${summarizeNeed(proposal)}`);
-    lines.push(`Why it matters: ${summarizeWhyItMatters(proposal)}`);
-    lines.push(`Timeline: ${summarizeDeadline(proposal)}`);
-    lines.push('');
   }
 
   return lines.join('\n').trim();
