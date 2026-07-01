@@ -1421,16 +1421,16 @@ function timingSafeEqual(a, b) {
 }
 
 function buildLarkCardContent(message, options = {}) {
-  const { mentionUserId = '', includeThreadReplyNote = false } = options;
+  const { mentionUserId = '', mentionInstruction = '' } = options;
   const lines = message.split(/\r?\n/);
   const title = lines.shift() || 'Scout Opportunity';
   const body = lines.join('\n').trim() || 'No details provided.';
   const elements = [];
 
-  if (mentionUserId || includeThreadReplyNote) {
+  if (mentionUserId || mentionInstruction) {
     const headerBits = [];
     if (mentionUserId) headerBits.push(`<at id="${mentionUserId}"></at>`);
-    if (includeThreadReplyNote) headerBits.push('**Reply to each thread to keep all conversations clean!**');
+    if (mentionInstruction) headerBits.push(mentionInstruction);
     elements.push(md(headerBits.join('\n')));
   }
 
@@ -1458,7 +1458,7 @@ function buildLarkCardContent(message, options = {}) {
 }
 
 function buildScoutAssessmentCard(assessment, fallbackMessage, options = {}) {
-  const { mentionUserId = '', includeThreadReplyNote = false } = options;
+  const { mentionUserId = '', mentionInstruction = '' } = options;
   const title = `${formatOpportunityType(assessment.opportunity_type)}: ${assessment.proposal_name || assessment.brand || 'Opportunity'}`;
   const verdict = assessment.verdict || 'MAYBE';
   const headerTemplate = verdict === 'YES' ? 'green' : verdict === 'NO' ? 'red' : 'orange';
@@ -1466,10 +1466,10 @@ function buildScoutAssessmentCard(assessment, fallbackMessage, options = {}) {
   const reason = assessment.decision_reason || assessment.one_line_take || 'Scout did not provide a reason.';
   const elements = [];
 
-  if (mentionUserId || includeThreadReplyNote) {
+  if (mentionUserId || mentionInstruction) {
     const headerBits = [];
     if (mentionUserId) headerBits.push(`<at id="${mentionUserId}"></at>`);
-    if (includeThreadReplyNote) headerBits.push('**Reply to each thread to keep all conversations clean!**');
+    if (mentionInstruction) headerBits.push(mentionInstruction);
     elements.push(md(headerBits.join('\n')));
     elements.push({ tag: 'hr' });
   }
@@ -1596,7 +1596,11 @@ async function sendLarkInteractiveMessage({ message, assessment, receiveId, rece
   const mentionUserId = resolvedReceiveIdType === 'chat_id'
     ? (process.env.COLLAB_ASSESSOR_LARK_NOTIFY_USER_ID?.trim() || '')
     : '';
-  const includeThreadReplyNote = resolvedReceiveIdType === 'chat_id';
+  const mentionInstruction = resolvedReceiveIdType === 'chat_id'
+    ? (assessment
+        ? '@Nuseir Yassin reply on this thread to keep all conversations clean!'
+        : '@Nuseir Yassin click on each item and reply on the thread')
+    : '';
 
   const token = await getLarkTenantAccessToken();
   const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(resolvedReceiveIdType)}`, {
@@ -1609,8 +1613,8 @@ async function sendLarkInteractiveMessage({ message, assessment, receiveId, rece
       receive_id: resolvedReceiveId,
       msg_type: 'interactive',
       content: JSON.stringify(assessment
-        ? buildScoutAssessmentCard(assessment, String(message).trim(), { mentionUserId, includeThreadReplyNote })
-        : buildLarkCardContent(String(message).trim(), { mentionUserId, includeThreadReplyNote }))
+        ? buildScoutAssessmentCard(assessment, String(message).trim(), { mentionUserId, mentionInstruction })
+        : buildLarkCardContent(String(message).trim(), { mentionUserId, mentionInstruction }))
     })
   });
   const data = await response.json().catch(() => ({}));
