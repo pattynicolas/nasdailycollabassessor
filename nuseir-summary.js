@@ -28,12 +28,32 @@ function summarizeDeadline(proposal) {
   return date;
 }
 
+function parseTimelineDate(proposal) {
+  const assessment = proposal?.assessment || {};
+  const value = cleanText(proposal?.event_date || assessment.timeline, '');
+  if (!value || /not stated|unknown|tbd|flexible|end of summer/i.test(value)) return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp);
+}
+
+function getUrgencyTag(proposal, options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date();
+  const target = parseTimelineDate(proposal);
+  if (!target) return '⚪ No deadline';
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diffDays = Math.ceil((target.getTime() - now.getTime()) / dayMs);
+  if (diffDays <= 3) return '🔴 Urgent';
+  if (diffDays <= 7) return '🟠 This week';
+  return '🟢 Upcoming';
+}
+
 function formatProposalTitle(proposal, options = {}) {
   const assessment = proposal?.assessment || {};
   const title = cleanText(assessment.proposal_name || assessment.brand, `Proposal #${proposal.id}`);
   const link = typeof options.linkForProposal === 'function' ? options.linkForProposal(proposal) : '';
-  if (link) return `• **[${title}](${link})**`;
-  return `• **${title}**`;
+  const urgency = getUrgencyTag(proposal, options);
+  if (link) return `• ${urgency} **[${title}](${link})**`;
+  return `• ${urgency} **${title}**`;
 }
 
 export function buildNuseirSummary(proposals = [], options = {}) {
