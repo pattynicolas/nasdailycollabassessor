@@ -1034,7 +1034,31 @@ app.get('/api/lark/user-lookup', async (req, res) => {
       });
     }
 
-    const users = Array.isArray(data?.data?.user_list) ? data.data.user_list : [];
+    let users = Array.isArray(data?.data?.user_list) ? data.data.user_list : [];
+
+    if (!users.length && query.includes('@')) {
+      try {
+        const tenantToken = await getLarkTenantAccessToken();
+        const fallbackResponse = await fetch('https://open.larksuite.com/open-apis/contact/v3/users/batch_get_id?user_id_type=open_id', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tenantToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            emails: [query]
+          })
+        });
+        const fallbackData = await fallbackResponse.json().catch(() => ({}));
+        const fallbackUsers = Array.isArray(fallbackData?.data?.user_list) ? fallbackData.data.user_list : [];
+        if (fallbackUsers.length) {
+          users = fallbackUsers;
+        }
+      } catch (_fallbackError) {
+        // Keep the original search result if fallback lookup fails.
+      }
+    }
+
     return res.json({
       ok: true,
       query,
