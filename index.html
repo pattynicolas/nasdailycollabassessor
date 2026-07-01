@@ -1030,8 +1030,9 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function buildNuseirSummary() {
       const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
+      const footer = `\n\nFull funnel: [Open Scout database](https://nasdailycollabassessor.onrender.com/?view=database)\nPassword: NasMeansPeople`;
       if (!pending.length) {
-        return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
+        return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".${footer}`;
       }
       const lines = [
         'Needs Nuseir’s decision',
@@ -1050,7 +1051,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const prefix = isUrgentProposal(proposal) ? '• 🔴 Urgent ' : '• ';
         lines.push(`${prefix}**[${title}](${buildBestProposalLink(proposal)})**`);
       }
-      return lines.join('\n').trim();
+      return `${lines.join('\n').trim()}${footer}`;
     }
 
     async function copyLarkMessage() {

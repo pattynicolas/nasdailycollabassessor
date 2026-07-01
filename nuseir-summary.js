@@ -1,4 +1,6 @@
 export const pendingNuseirStatus = 'Pending Nuseir';
+const funnelUrl = 'https://nasdailycollabassessor.onrender.com/?view=database';
+const funnelPassword = 'NasMeansPeople';
 
 function cleanText(value, fallback = 'Not stated') {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
@@ -60,8 +62,9 @@ function formatProposalTitle(proposal, options = {}) {
 
 export function buildNuseirSummary(proposals = [], options = {}) {
   const pending = proposals.filter(proposal => String(proposal?.status || '').trim() === pendingNuseirStatus);
+  const footer = `\n\nFull funnel: [Open Scout database](${funnelUrl})\nPassword: ${funnelPassword}`;
   if (!pending.length) {
-    return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
+    return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".${footer}`;
   }
 
   const lines = [
@@ -84,5 +87,5 @@ export function buildNuseirSummary(proposals = [], options = {}) {
     lines.push(formatProposalTitle(proposal, options));
   }
 
-  return lines.join('\n').trim();
+  return `${lines.join('\n').trim()}${footer}`;
 }
