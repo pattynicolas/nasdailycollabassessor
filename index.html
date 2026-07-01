@@ -543,11 +543,11 @@
         <div class="database-toolbar">
           <input id="proposal-search" type="search" placeholder="Search brand, proposal, requester, or notes" oninput="scheduleProposalLoad()" />
           <select id="proposal-filter" onchange="loadProposals(false)"><option>All</option></select>
-          <button class="copy-btn" onclick="openNuseirSummaryDialog()"><i class="ti ti-message-chatbot"></i> Summarize for Nuseir</button>
+          <button class="copy-btn" id="btn-summarize-nuseir" onclick="openNuseirSummaryDialog()"><i class="ti ti-message-chatbot"></i> Summarize for Nuseir</button>
           <button class="copy-btn" onclick="downloadProposalCsv()"><i class="ti ti-download"></i> Download CSV</button>
-          <button class="copy-btn" onclick="downloadFullBackup()" title="Includes every proposal, screenshot, contract, and invoice"><i class="ti ti-database-export"></i> Full backup</button>
-          <button class="copy-btn" onclick="syncGoogleSheetBackup(event)" title="Refresh the Google Sheet backup"><i class="ti ti-brand-google-drive"></i> Sync Google Sheet</button>
-          <button class="copy-btn" onclick="document.getElementById('proposal-import-file').click()"><i class="ti ti-file-upload"></i> Import proposals</button>
+          <button class="copy-btn" id="btn-full-backup" onclick="downloadFullBackup()" title="Includes every proposal, screenshot, contract, and invoice"><i class="ti ti-database-export"></i> Full backup</button>
+          <button class="copy-btn" id="btn-sync-google-sheet" onclick="syncGoogleSheetBackup(event)" title="Refresh the Google Sheet backup"><i class="ti ti-brand-google-drive"></i> Sync Google Sheet</button>
+          <button class="copy-btn" id="btn-import-proposals" onclick="document.getElementById('proposal-import-file').click()"><i class="ti ti-file-upload"></i> Import proposals</button>
           <input id="proposal-import-file" type="file" accept="application/json,.json" style="display:none" onchange="importProposalFile(event)" />
           <button class="copy-btn" onclick="loadProposals(false)"><i class="ti ti-refresh"></i> Refresh</button>
         </div>
@@ -1801,11 +1801,9 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function updateProposalToolbarAccess() {
       const readOnly = proposalAccessRole !== 'admin';
-      Array.from(document.querySelectorAll('.database-toolbar .copy-btn')).forEach(button => {
-        const action = button.textContent || '';
-        if (/Download CSV|Full backup|Sync Google Sheet|Import proposals/.test(action)) {
-          button.style.display = readOnly ? 'none' : '';
-        }
+      ['btn-summarize-nuseir', 'btn-full-backup', 'btn-sync-google-sheet', 'btn-import-proposals'].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) button.style.display = readOnly ? 'none' : '';
       });
     }
 
