@@ -28,7 +28,15 @@ function summarizeDeadline(proposal) {
   return date;
 }
 
-export function buildNuseirSummary(proposals = []) {
+function formatProposalTitle(proposal, options = {}) {
+  const assessment = proposal?.assessment || {};
+  const title = cleanText(assessment.proposal_name || assessment.brand, `Proposal #${proposal.id}`);
+  const link = typeof options.linkForProposal === 'function' ? options.linkForProposal(proposal) : '';
+  if (link) return `• **[${title}](${link})**`;
+  return `• **${title}**`;
+}
+
+export function buildNuseirSummary(proposals = [], options = {}) {
   const pending = proposals.filter(proposal => String(proposal?.status || '').trim() === pendingNuseirStatus);
   if (!pending.length) {
     return `Pending Nuseir decisions\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
@@ -43,7 +51,7 @@ export function buildNuseirSummary(proposals = []) {
 
   for (const proposal of pending) {
     const assessment = proposal?.assessment || {};
-    lines.push(`• ${cleanText(assessment.proposal_name || assessment.brand, `Proposal #${proposal.id}`)}`);
+    lines.push(formatProposalTitle(proposal, options));
     lines.push(`Need: ${summarizeNeed(proposal)}`);
     lines.push(`Why it matters: ${summarizeWhyItMatters(proposal)}`);
     lines.push(`Timeline: ${summarizeDeadline(proposal)}`);

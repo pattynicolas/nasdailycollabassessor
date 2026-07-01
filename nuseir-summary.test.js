@@ -32,3 +32,24 @@ test('buildNuseirSummary shows empty state when no proposals are pending', () =>
   const summary = buildNuseirSummary([]);
   assert.match(summary, /No proposals are currently marked "Pending Nuseir"\./);
 });
+
+test('buildNuseirSummary can render bold clickable proposal titles', () => {
+  const summary = buildNuseirSummary([
+    {
+      id: 9,
+      status: pendingNuseirStatus,
+      event_date: '2026-08-01',
+      assessment: {
+        proposal_name: 'Clickable Proposal',
+        next_step: 'Review it.',
+        decision_reason: 'Worth context.'
+      }
+    }
+  ], {
+    linkForProposal(proposal) {
+      return `https://example.com/?proposal=${proposal.id}`;
+    }
+  });
+
+  assert.match(summary, /\*\*\[Clickable Proposal\]\(https:\/\/example\.com\/\?proposal=9\)\*\*/);
+});

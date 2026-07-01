@@ -379,6 +379,7 @@
     .proposal-list { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
     .proposal-record { padding: 16px; border-bottom: 0.5px solid var(--border); }
     .proposal-record:last-child { border-bottom: none; }
+    .proposal-record.proposal-focus { outline: 2px solid var(--text-info); outline-offset: -2px; }
     .record-status-pending-details { background: color-mix(in srgb, var(--bg-warning) 32%, var(--bg)); border-left: 4px solid var(--text-warning); }
     .record-status-agreed-pending-contract { background: color-mix(in srgb, var(--bg-info) 32%, var(--bg)); border-left: 4px solid var(--text-info); }
     .record-status-rejected { background: color-mix(in srgb, var(--bg-danger) 28%, var(--bg)); border-left: 4px solid var(--text-danger); }
@@ -626,7 +627,9 @@
     let loadedProposals = new Map();
     let updateImages = new Map();
     let pendingProposalUpdate = null;
-    const pageMode = new URLSearchParams(window.location.search).get('view') || '';
+    const pageParams = new URLSearchParams(window.location.search);
+    const pageMode = pageParams.get('view') || '';
+    const focusedProposalId = Number(pageParams.get('proposal') || 0);
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
@@ -1007,6 +1010,10 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return parts.length ? parts.join(' ') : 'Scout found limited evidence that this opportunity justifies Nuseir’s time.';
     }
 
+    function buildProposalPermalink(id) {
+      return `${window.location.origin}/?view=database&proposal=${encodeURIComponent(id)}`;
+    }
+
     function buildNuseirSummary() {
       const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
       if (!pending.length) {
@@ -1021,6 +1028,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       for (const proposal of pending.sort(compareProposalDates)) {
         const assessment = proposal.assessment || {};
         const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
+        const titleLine = `• **[${title}](${buildProposalPermalink(proposal.id)})**`;
         const nextStep = String(assessment.next_step || '').trim();
         const ask = String(assessment.ask || '').trim();
         const need = nextStep && !/not stated/i.test(nextStep)
@@ -1030,7 +1038,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             : 'Review and share go / no-go / questions.';
         const reason = String(assessment.decision_reason || assessment.one_line_take || assessment.proposal_summary || '').trim() || 'Worth a quick read before deciding.';
         const timeline = String(proposal.event_date || assessment.timeline || '').trim();
-        lines.push(`• ${title}`);
+        lines.push(titleLine);
         lines.push(`Need: ${need}`);
         lines.push(`Why it matters: ${reason}`);
         lines.push(`Timeline: ${timeline && !/not stated|unknown|tbd|flexible/i.test(timeline) ? timeline : 'No clear deadline stated.'}`);
@@ -1128,7 +1136,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const sourceBadge = renderMetaBadge(proposal.intake_source || a.intake_source || 'Manual', 'source');
         const confidenceBadge = renderMetaBadge(proposal.intake_confidence || a.confidence || 'Medium', 'confidence');
         const reviewBadge = String(a.review_flag || 'Ready') === 'Needs human cleanup' ? renderMetaBadge(a.review_flag, 'review') : '';
-        return `<article class="proposal-record record-${getStatusClass(proposal.status)}">
+        return `<article class="proposal-record record-${getStatusClass(proposal.status)}" data-proposal-id="${proposal.id}">
           <div class="record-head">
             <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
             <div><div class="proposal-title-row"><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-badges">${sourceBadge}${confidenceBadge}${reviewBadge}</div></div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
@@ -1160,6 +1168,18 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         </div></div>`}</article>`;
       }).join('');
       loadSourcePreviews();
+      if (focusedProposalId) focusProposalRecord(focusedProposalId);
+    }
+
+    function focusProposalRecord(id) {
+      const record = document.querySelector(`.proposal-record.proposal-focus`);
+      if (record) record.classList.remove('proposal-focus');
+      const proposalNode = document.querySelector(`.proposal-record[data-proposal-id="${id}"]`);
+      if (!proposalNode) return;
+      proposalNode.classList.add('proposal-focus');
+      const details = proposalNode.querySelector('.record-details');
+      if (details) details.open = true;
+      proposalNode.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function renderProposalDetails(proposal, readOnly = false) {

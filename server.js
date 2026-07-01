@@ -168,6 +168,21 @@ function buildSourceFingerprint(email, bodyText) {
   return sha256(basis);
 }
 
+function getPublicAppBaseUrl(req) {
+  const envUrl = process.env.SCOUT_PUBLIC_BASE_URL?.trim();
+  if (envUrl) return envUrl.replace(/\/+$/, '');
+  const host = req?.headers?.host ? String(req.headers.host).trim() : '';
+  if (!host) return '';
+  const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '').trim();
+  const protocol = forwardedProto || (host.includes('localhost') ? 'http' : 'https');
+  return `${protocol}://${host}`.replace(/\/+$/, '');
+}
+
+function buildProposalPermalink(baseUrl, proposalId) {
+  if (!baseUrl || !proposalId) return '';
+  return `${baseUrl}/?view=database&proposal=${encodeURIComponent(proposalId)}`;
+}
+
 function groupAttachmentsByProposal(files) {
   const grouped = new Map();
   for (const file of files) {
@@ -599,7 +614,10 @@ async function initializeDatabase() {
     ADD COLUMN IF NOT EXISTS intake_source TEXT NOT NULL DEFAULT 'Manual',
     ADD COLUMN IF NOT EXISTS intake_confidence TEXT NOT NULL DEFAULT 'Medium',
     ADD COLUMN IF NOT EXISTS inbound_message_id TEXT NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS source_fingerprint TEXT NOT NULL DEFAULT ''`);
+    ADD COLUMN IF NOT EXISTS source_fingerprint TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS lark_chat_id TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS lark_message_id TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS last_lark_sent_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'Pending Details'`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS scout_proposals_inbound_message_id_idx
     ON scout_proposals (inbound_message_id) WHERE inbound_message_id <> ''`);
@@ -669,7 +687,8 @@ app.get('/api/proposals', requireDatabaseRead, async (req, res) => {
     }
     const result = await pool.query(
       `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location, p.source_text,
-        p.payment_status, p.commission_breakdown, p.intake_source, p.intake_confidence, p.inbound_message_id, p.source_fingerprint, p.assessment,
+        p.payment_status, p.commission_breakdown, p.intake_source, p.intake_confidence, p.inbound_message_id, p.source_fingerprint,
+        p.lark_chat_id, p.lark_message_id, p.last_lark_sent_at, p.assessment,
         COALESCE((SELECT json_agg(json_build_object('id', f.id, 'kind', f.kind, 'file_name', f.file_name, 'mime_type', f.mime_type, 'file_size', f.file_size)) FROM scout_proposal_files f WHERE f.proposal_id = p.id), '[]'::json) AS attachments
        FROM scout_proposals p ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY p.created_at DESC LIMIT 500`,
       values
@@ -1057,6 +1076,7 @@ app.post('/api/inbound-email', async (req, res) => {
       const liveResult = await sendLarkInteractiveMessage({
         message: larkDraft,
         assessment,
+        proposalId: Number(assessment?.proposal_record?.id || 0),
         receiveId: process.env.SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID?.trim(),
         receiveIdType: process.env.SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID_TYPE?.trim() || 'chat_id'
       });
@@ -1230,7 +1250,12 @@ app.post('/api/nuseir-digest/test', async (req, res) => {
     );
 
     const proposals = result.rows || [];
-    const summary = buildNuseirSummary(proposals);
+    const baseUrl = getPublicAppBaseUrl(req);
+    const summary = buildNuseirSummary(proposals, {
+      linkForProposal(proposal) {
+        return buildProposalPermalink(baseUrl, proposal?.id);
+      }
+    });
     const receiveId = process.env.SCOUT_NUSEIR_DIGEST_TEST_RECEIVE_ID?.trim()
       || process.env.SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID?.trim()
       || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
@@ -1448,7 +1473,7 @@ function linkifyLarkLine(line) {
   return parts.length ? parts : [{ tag: 'text', text: line }];
 }
 
-async function sendLarkInteractiveMessage({ message, assessment, receiveId, receiveIdType }) {
+async function sendLarkInteractiveMessage({ message, assessment, receiveId, receiveIdType, proposalId = 0 }) {
   const resolvedReceiveId = receiveId
     || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
     || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
@@ -1479,7 +1504,32 @@ async function sendLarkInteractiveMessage({ message, assessment, receiveId, rece
   if (!response.ok || data.code) {
     throw new Error(data.msg || data.error?.message || 'Could not send Lark message.');
   }
-  return { message_id: data.data?.message_id, data };
+  const result = {
+    message_id: data.data?.message_id,
+    chat_id: resolvedReceiveIdType === 'chat_id' ? resolvedReceiveId : '',
+    receive_id: resolvedReceiveId,
+    receive_id_type: resolvedReceiveIdType,
+    data
+  };
+
+  if (pool && proposalId && result.message_id) {
+    try {
+      await databaseReady;
+      await pool.query(
+        `UPDATE scout_proposals
+         SET lark_message_id = $1,
+             lark_chat_id = CASE WHEN $2 <> '' THEN $2 ELSE lark_chat_id END,
+             last_lark_sent_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $3`,
+        [result.message_id, result.chat_id || '', proposalId]
+      );
+    } catch (error) {
+      console.error('Scout saved the Lark message but could not store the reference:', error.message);
+    }
+  }
+
+  return result;
 }
 
 app.get('/api/lark/chats', async (_req, res) => {
