@@ -600,7 +600,7 @@
   <dialog class="summary-dialog" id="nuseir-summary-dialog">
     <div class="summary-shell">
       <div class="attachment-viewer-head">
-        <div class="attachment-viewer-title">Pending Nuseir summary</div>
+        <div class="attachment-viewer-title">Needs Nuseir’s decision</div>
         <div class="attachment-viewer-actions">
           <button class="copy-btn" type="button" onclick="copyNuseirSummary()"><i class="ti ti-copy"></i> Copy summary</button>
           <button class="copy-btn" id="send-test-digest-btn" type="button" onclick="sendTestNuseirDigest()"><i class="ti ti-send"></i> Send test to Lark</button>
@@ -1017,10 +1017,10 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     function buildNuseirSummary() {
       const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
       if (!pending.length) {
-        return `Pending Nuseir decisions\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
+        return `Needs Nuseir’s decision\n\nNo proposals are currently marked "${pendingNuseirStatus}".`;
       }
       const lines = [
-        'Pending Nuseir decisions',
+        'Needs Nuseir’s decision',
         '',
         `${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
         ''
