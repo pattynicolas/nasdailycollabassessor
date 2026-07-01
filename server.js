@@ -1598,8 +1598,8 @@ async function sendLarkInteractiveMessage({ message, assessment, receiveId, rece
     : '';
   const mentionInstruction = resolvedReceiveIdType === 'chat_id'
     ? (assessment
-        ? '@Nuseir Yassin reply on this thread to keep all conversations clean!'
-        : '@Nuseir Yassin click on each item and reply on the thread')
+        ? 'reply on this thread to keep all conversations clean!'
+        : 'click on each item and reply on the thread')
     : '';
 
   const token = await getLarkTenantAccessToken();
