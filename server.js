@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import pg from 'pg';
 import { fileURLToPath } from 'node:url';
 import { deleteProposalById } from './proposal-delete.js';
-import { pendingNuseirStatus } from './nuseir-summary.js';
+import { buildNuseirSummary, pendingNuseirStatus } from './nuseir-summary.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1206,6 +1206,64 @@ app.post('/api/lark/message', async (req, res) => {
     return res.status(200).json({ ok: true, ...result });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
+  }
+});
+
+app.post('/api/nuseir-digest/test', async (req, res) => {
+  if (!isAuthorizedAdmin(req)) {
+    return res.status(403).json({ error: 'Not authorized. This action is restricted to Patty.' });
+  }
+  if (!pool) {
+    return res.status(503).json({ error: 'Proposal database is not connected. Add DATABASE_URL in Render.' });
+  }
+
+  try {
+    await databaseReady;
+    const result = await pool.query(
+      `SELECT p.id, p.created_at, p.updated_at, p.status, p.notes, p.event_date, p.location, p.source_text,
+        p.payment_status, p.commission_breakdown, p.intake_source, p.intake_confidence, p.inbound_message_id, p.source_fingerprint, p.assessment
+       FROM scout_proposals p
+       WHERE p.status = $1
+       ORDER BY p.created_at DESC
+       LIMIT 200`,
+      [pendingNuseirStatus]
+    );
+
+    const proposals = result.rows || [];
+    const summary = buildNuseirSummary(proposals);
+    const receiveId = process.env.SCOUT_NUSEIR_DIGEST_TEST_RECEIVE_ID?.trim()
+      || process.env.SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID?.trim()
+      || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
+      || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
+    const receiveIdType = process.env.SCOUT_NUSEIR_DIGEST_TEST_RECEIVE_ID_TYPE?.trim()
+      || process.env.SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID_TYPE?.trim()
+      || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE?.trim()
+      || (process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim() ? 'email' : 'chat_id');
+
+    if (!receiveId) {
+      return res.status(400).json({
+        error: 'No test digest Lark target is configured. Add SCOUT_NUSEIR_DIGEST_TEST_RECEIVE_ID (preferred) or reuse SCOUT_EMAIL_AUTOMATION_TEST_RECEIVE_ID.'
+      });
+    }
+
+    const intro = proposals.length
+      ? `Scout test digest for Nuseir\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`
+      : `Scout test digest for Nuseir\n\nReview only — this is a test digest, not the live Scout group.\n\n${summary}`;
+    const sendResult = await sendLarkInteractiveMessage({
+      message: intro,
+      receiveId,
+      receiveIdType
+    });
+
+    return res.status(200).json({
+      ok: true,
+      proposals: proposals.length,
+      receive_id_type: receiveIdType,
+      summary,
+      ...sendResult
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not send the test digest.' });
   }
 });
 

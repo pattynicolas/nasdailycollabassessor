@@ -602,6 +602,7 @@
         <div class="attachment-viewer-title">Pending Nuseir summary</div>
         <div class="attachment-viewer-actions">
           <button class="copy-btn" type="button" onclick="copyNuseirSummary()"><i class="ti ti-copy"></i> Copy summary</button>
+          <button class="copy-btn" id="send-test-digest-btn" type="button" onclick="sendTestNuseirDigest()"><i class="ti ti-send"></i> Send test to Lark</button>
           <button class="icon-btn" type="button" title="Close" onclick="closeNuseirSummaryDialog()"><i class="ti ti-x"></i></button>
         </div>
       </div>
@@ -1632,6 +1633,34 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         await navigator.clipboard.writeText(output.value);
       } catch {
         document.execCommand('copy');
+      }
+    }
+
+    async function sendTestNuseirDigest() {
+      const button = document.getElementById('send-test-digest-btn');
+      const original = button?.innerHTML;
+      try {
+        const adminKey = getScoutAdminKey();
+        if (!adminKey) return;
+        if (button) {
+          button.disabled = true;
+          button.innerHTML = '<span class="spinner"></span> Sending...';
+        }
+        const response = await fetch('/api/nuseir-digest/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': adminKey }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 403) clearScoutAdminKey();
+        if (!response.ok) throw new Error(data.error || 'Could not send the test digest.');
+        alert(`Test digest sent to Lark (${data.proposals || 0} pending proposal${data.proposals === 1 ? '' : 's'}).`);
+      } catch (error) {
+        alert(error.message || 'Could not send the test digest.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = original;
+        }
       }
     }
 
