@@ -1420,10 +1420,27 @@ function timingSafeEqual(a, b) {
   return crypto.timingSafeEqual(aBuffer, bBuffer);
 }
 
-function buildLarkCardContent(message) {
+function buildLarkCardContent(message, options = {}) {
+  const { mentionUserId = '', includeThreadReplyNote = false } = options;
   const lines = message.split(/\r?\n/);
   const title = lines.shift() || 'Scout Opportunity';
   const body = lines.join('\n').trim() || 'No details provided.';
+  const elements = [];
+
+  if (mentionUserId || includeThreadReplyNote) {
+    const headerBits = [];
+    if (mentionUserId) headerBits.push(`<at id="${mentionUserId}"></at>`);
+    if (includeThreadReplyNote) headerBits.push('**Reply to each thread to keep all conversations clean!**');
+    elements.push(md(headerBits.join('\n')));
+  }
+
+  elements.push({
+    tag: 'div',
+    text: {
+      tag: 'lark_md',
+      content: body
+    }
+  });
 
   return {
     config: {
@@ -1436,24 +1453,41 @@ function buildLarkCardContent(message) {
         content: title
       }
     },
-    elements: [
-      {
-        tag: 'div',
-        text: {
-          tag: 'lark_md',
-          content: body
-        }
-      }
-    ]
+    elements
   };
 }
 
-function buildScoutAssessmentCard(assessment, fallbackMessage) {
+function buildScoutAssessmentCard(assessment, fallbackMessage, options = {}) {
+  const { mentionUserId = '', includeThreadReplyNote = false } = options;
   const title = `${formatOpportunityType(assessment.opportunity_type)}: ${assessment.proposal_name || assessment.brand || 'Opportunity'}`;
   const verdict = assessment.verdict || 'MAYBE';
   const headerTemplate = verdict === 'YES' ? 'green' : verdict === 'NO' ? 'red' : 'orange';
   const summary = assessment.proposal_summary || getMessageBody(fallbackMessage) || 'No proposal summary available.';
   const reason = assessment.decision_reason || assessment.one_line_take || 'Scout did not provide a reason.';
+  const elements = [];
+
+  if (mentionUserId || includeThreadReplyNote) {
+    const headerBits = [];
+    if (mentionUserId) headerBits.push(`<at id="${mentionUserId}"></at>`);
+    if (includeThreadReplyNote) headerBits.push('**Reply to each thread to keep all conversations clean!**');
+    elements.push(md(headerBits.join('\n')));
+    elements.push({ tag: 'hr' });
+  }
+
+  elements.push(
+    md(`**RECOMMENDATION**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
+    { tag: 'hr' },
+    md(`**SUMMARY**\n${summary}`),
+    md(`**Requester:** ${assessment.requester_name || 'Not stated'}\n**Requester Context:** ${assessment.requester_context || 'Not verified'}`),
+    md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
+    { tag: 'hr' },
+    md(`**OPPORTUNITY TYPE**\n${formatOpportunityType(assessment.opportunity_type)}`),
+    { tag: 'hr' },
+    md(`**ASK**\n${assessment.ask || 'Not stated'}`),
+    md(`**NEXT STEP**\n${assessment.next_step || 'Not stated'}`),
+    { tag: 'hr' },
+    md(`**REASON**\n${reason}`)
+  );
 
   return {
     config: {
@@ -1466,20 +1500,7 @@ function buildScoutAssessmentCard(assessment, fallbackMessage) {
         content: title
       }
     },
-    elements: [
-      md(`**RECOMMENDATION**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
-      { tag: 'hr' },
-      md(`**SUMMARY**\n${summary}`),
-      md(`**Requester:** ${assessment.requester_name || 'Not stated'}\n**Requester Context:** ${assessment.requester_context || 'Not verified'}`),
-      md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
-      { tag: 'hr' },
-      md(`**OPPORTUNITY TYPE**\n${formatOpportunityType(assessment.opportunity_type)}`),
-      { tag: 'hr' },
-      md(`**ASK**\n${assessment.ask || 'Not stated'}`),
-      md(`**NEXT STEP**\n${assessment.next_step || 'Not stated'}`),
-      { tag: 'hr' },
-      md(`**REASON**\n${reason}`)
-    ]
+    elements
   };
 }
 
@@ -1572,6 +1593,11 @@ async function sendLarkInteractiveMessage({ message, assessment, receiveId, rece
     throw new Error('Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL in Render, or add COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE.');
   }
 
+  const mentionUserId = resolvedReceiveIdType === 'chat_id'
+    ? (process.env.COLLAB_ASSESSOR_LARK_NOTIFY_USER_ID?.trim() || '')
+    : '';
+  const includeThreadReplyNote = resolvedReceiveIdType === 'chat_id';
+
   const token = await getLarkTenantAccessToken();
   const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(resolvedReceiveIdType)}`, {
     method: 'POST',
@@ -1583,8 +1609,8 @@ async function sendLarkInteractiveMessage({ message, assessment, receiveId, rece
       receive_id: resolvedReceiveId,
       msg_type: 'interactive',
       content: JSON.stringify(assessment
-        ? buildScoutAssessmentCard(assessment, String(message).trim())
-        : buildLarkCardContent(String(message).trim()))
+        ? buildScoutAssessmentCard(assessment, String(message).trim(), { mentionUserId, includeThreadReplyNote })
+        : buildLarkCardContent(String(message).trim(), { mentionUserId, includeThreadReplyNote }))
     })
   });
   const data = await response.json().catch(() => ({}));
