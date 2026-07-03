@@ -62,6 +62,9 @@
     }
 
     .assessor-column { max-width: 640px; margin: 0 auto; }
+    body.database-only .assessor-column { display: none; }
+    body.database-only .container { max-width: 1280px; }
+    body.database-only .database-card { margin-top: 0; }
 
     header {
       margin-bottom: 2rem;
@@ -376,17 +379,27 @@
     .proposal-list { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
     .proposal-record { padding: 16px; border-bottom: 0.5px solid var(--border); }
     .proposal-record:last-child { border-bottom: none; }
+    .proposal-record.proposal-focus { outline: 2px solid var(--text-info); outline-offset: -2px; }
     .record-status-pending-details { background: color-mix(in srgb, var(--bg-warning) 32%, var(--bg)); border-left: 4px solid var(--text-warning); }
     .record-status-agreed-pending-contract { background: color-mix(in srgb, var(--bg-info) 32%, var(--bg)); border-left: 4px solid var(--text-info); }
     .record-status-rejected { background: color-mix(in srgb, var(--bg-danger) 28%, var(--bg)); border-left: 4px solid var(--text-danger); }
     .record-status-contract-signed { background: color-mix(in srgb, var(--bg-info) 45%, var(--bg)); border-left: 4px solid var(--text-info); }
     .record-status-delivered { background: color-mix(in srgb, var(--bg-success) 38%, var(--bg)); border-left: 4px solid var(--text-success); }
-    .record-head { display: grid; grid-template-columns: 140px minmax(280px, 1fr) minmax(190px, 230px) 40px; gap: 14px; align-items: center; }
+    .record-head { display: grid; grid-template-columns: 140px minmax(280px, 1fr) minmax(190px, 230px) auto; gap: 14px; align-items: center; }
     .record-fields { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 10px; }
     .record-field label { display: block; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
     .proposal-title { font-size: 16px; font-weight: 650; margin-bottom: 5px; }
+    .proposal-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
     .proposal-meta { color: var(--text-secondary); font-size: 12px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .proposal-summary { color: var(--text-secondary); line-height: 1.55; margin-top: 7px; }
+    .proposal-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+    .meta-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; border: .5px solid var(--border-mid); background: var(--bg-secondary); color: var(--text-secondary); }
+    .meta-badge.source-forwarded-email, .meta-badge.source-auto-scouted { background: var(--bg-info); color: var(--text-info); }
+    .meta-badge.source-manual, .meta-badge.source-direct-email { background: var(--bg-success); color: var(--text-success); }
+    .meta-badge.confidence-high { background: var(--bg-success); color: var(--text-success); }
+    .meta-badge.confidence-medium { background: var(--bg-warning); color: var(--text-warning); }
+    .meta-badge.confidence-low { background: var(--bg-danger); color: var(--text-danger); }
+    .meta-badge.review-needs-human-cleanup { background: var(--bg-danger); color: var(--text-danger); }
     .date-card { min-height: 58px; display: flex; flex-direction: column; justify-content: center; padding: 8px 10px; border-radius: var(--radius); background: var(--bg-info); color: var(--text-info); }
     .date-card strong { color: var(--text); font-size: 13px; line-height: 1.25; }
     .date-card span { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
@@ -395,6 +408,7 @@
     .status-agreed-pending-contract, .status-contract-signed { background: var(--bg-info); color: var(--text-info); }
     .status-rejected { background: var(--bg-danger); color: var(--text-danger); }
     .status-delivered { background: var(--bg-success); color: var(--text-success); }
+    .record-actions { display: flex; gap: 8px; align-items: center; justify-self: end; }
     .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: .5px solid var(--border-mid); border-radius: var(--radius); background: var(--bg); color: var(--text); cursor: pointer; font-size: 17px; }
     .icon-btn:hover { background: var(--bg-secondary); }
     .about-details { margin-top: 10px; }
@@ -410,11 +424,20 @@
     .detail-text { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
     .detail-facts { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 12px; line-height: 1.5; }
     .detail-facts strong { color: var(--text-secondary); }
+    .inline-detail-input { width: 100%; border: 0.5px solid var(--border-mid); border-radius: var(--radius); background: var(--bg-secondary); color: var(--text); font: inherit; font-size: 12px; padding: 7px 8px; }
     .original-heading { margin-top: 4px; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
     .original-text { white-space: pre-wrap; padding: 10px 12px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text-secondary); font-size: 12px; line-height: 1.55; max-height: 260px; overflow: auto; }
     .source-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
     .source-gallery button { padding: 0; border: .5px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); cursor: zoom-in; }
     .source-gallery img { display: block; width: 100%; height: 150px; object-fit: cover; }
+    .original-preview { margin-top: 10px; display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg-secondary); }
+    .original-preview-thumb { width: 86px; height: 86px; border-radius: var(--radius); object-fit: cover; border: .5px solid var(--border); background: var(--bg); }
+    .original-preview-body { min-width: 0; }
+    .original-preview-label { color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin-bottom: 5px; }
+    .original-preview-title { font-size: 13px; font-weight: 650; margin-bottom: 4px; }
+    .original-preview-text { color: var(--text-secondary); font-size: 12px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .original-preview-actions { display: flex; align-items: center; gap: 8px; align-self: center; }
+    .original-preview-empty { padding: 11px 12px; border: .5px dashed var(--border); border-radius: var(--radius); color: var(--text-secondary); font-size: 12px; line-height: 1.45; background: var(--bg); }
     .proposal-notes { min-height: 66px; min-width: 220px; font-size: 13px; line-height: 1.4; }
     .save-state { display: block; color: var(--text-secondary); font-size: 11px; margin-top: 4px; min-height: 15px; }
     .empty-state { color: var(--text-secondary); text-align: center; padding: 2rem; font-size: 14px; }
@@ -438,10 +461,35 @@
     .attachment-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 5px; }
     .attachment-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border: .5px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 11px; }
     .attachment-chip button { border: 0; background: none; color: var(--text-danger); cursor: pointer; }
+    .attachment-chip .attachment-open { color: var(--text); display: inline-flex; align-items: center; gap: 5px; text-align: left; }
+    .attachment-viewer { width: min(920px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); padding: 0; border: 0; border-radius: var(--radius); box-shadow: 0 24px 70px rgba(0,0,0,.25); background: var(--bg); }
+    .attachment-viewer::backdrop { background: rgba(20, 24, 28, .55); }
+    .attachment-viewer-shell { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+    .attachment-viewer-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: .5px solid var(--border); }
+    .attachment-viewer-title { min-width: 0; flex: 1; font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .attachment-viewer-actions { display: flex; gap: 7px; }
+    .attachment-viewer-body { min-height: 0; display: grid; place-items: center; overflow: auto; background: var(--bg-secondary); }
+    .attachment-viewer-body iframe { width: 100%; height: 100%; border: 0; background: white; }
+    .attachment-viewer-body img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+    .attachment-unavailable { max-width: 430px; padding: 28px; text-align: center; color: var(--text-secondary); }
+    .attachment-unavailable i { display: block; font-size: 42px; margin-bottom: 10px; }
+    .update-preview-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .update-confirm-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; }
+    .update-confirm-grid .wide { grid-column: 1 / -1; }
+    .update-confirm-grid label { display: grid; gap: 5px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); font-weight: 650; }
+    .update-confirm-grid input, .update-confirm-grid textarea, .update-confirm-grid select { width: 100%; font: inherit; color: var(--text); background: var(--bg-secondary); border: .5px solid var(--border); border-radius: var(--radius); padding: 9px 10px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+    .update-confirm-grid textarea { min-height: 78px; }
+    .update-confirm-note { padding: 12px 16px 0; color: var(--text-secondary); font-size: 13px; line-height: 1.4; }
     .status-guide { margin-top: 12px; border: .5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
     .status-guide summary { cursor: pointer; font-size: 13px; font-weight: 600; }
     .status-guide-grid { display: grid; grid-template-columns: 180px 1fr; gap: 7px 12px; margin-top: 10px; font-size: 12px; line-height: 1.45; }
-    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
+    .summary-dialog { width: min(860px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: var(--radius); box-shadow: 0 24px 70px rgba(0,0,0,.25); background: var(--bg); }
+    .summary-dialog::backdrop { background: rgba(20, 24, 28, .55); }
+    .summary-shell { display: grid; grid-template-rows: auto 1fr; max-height: min(760px, calc(100vh - 32px)); }
+    .summary-body { padding: 16px; display: grid; gap: 12px; }
+    .summary-body textarea { width: 100%; min-height: 360px; font: inherit; color: var(--text); background: var(--bg-secondary); border: .5px solid var(--border); border-radius: var(--radius); padding: 12px; resize: vertical; }
+    .summary-hint { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+    @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid, .update-confirm-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
   </style>
 </head>
 <body>
@@ -493,6 +541,7 @@
           <summary><i class="ti ti-info-circle"></i> What each status means</summary>
           <div class="status-guide-grid">
             <strong>Pending Details</strong><span>We replied and need more information before approving or rejecting.</span>
+            <strong>Pending Nuseir</strong><span>We have enough context and are waiting for Nuseir’s decision or reaction.</span>
             <strong>Agreed; Pending Contract</strong><span>Nuseir said yes. We are waiting for the agreement to be finalized and signed.</span>
             <strong>Rejected</strong><span>We declined the opportunity.</span>
             <strong>Contract Signed</strong><span>The agreement is signed; delivery or the event is still pending.</span>
@@ -502,10 +551,11 @@
         <div class="database-toolbar">
           <input id="proposal-search" type="search" placeholder="Search brand, proposal, requester, or notes" oninput="scheduleProposalLoad()" />
           <select id="proposal-filter" onchange="loadProposals(false)"><option>All</option></select>
+          <button class="copy-btn" id="btn-summarize-nuseir" onclick="openNuseirSummaryDialog()"><i class="ti ti-message-chatbot"></i> Summarize for Nuseir</button>
           <button class="copy-btn" onclick="downloadProposalCsv()"><i class="ti ti-download"></i> Download CSV</button>
-          <button class="copy-btn" onclick="downloadFullBackup()" title="Includes every proposal, screenshot, contract, and invoice"><i class="ti ti-database-export"></i> Full backup</button>
-          <button class="copy-btn" onclick="syncGoogleSheetBackup(event)" title="Refresh the Google Sheet backup"><i class="ti ti-brand-google-drive"></i> Sync Google Sheet</button>
-          <button class="copy-btn" onclick="document.getElementById('proposal-import-file').click()"><i class="ti ti-file-upload"></i> Import proposals</button>
+          <button class="copy-btn" id="btn-full-backup" onclick="downloadFullBackup()" title="Includes every proposal, screenshot, contract, and invoice"><i class="ti ti-database-export"></i> Full backup</button>
+          <button class="copy-btn" id="btn-sync-google-sheet" onclick="syncGoogleSheetBackup(event)" title="Refresh the Google Sheet backup"><i class="ti ti-brand-google-drive"></i> Sync Google Sheet</button>
+          <button class="copy-btn" id="btn-import-proposals" onclick="document.getElementById('proposal-import-file').click()"><i class="ti ti-file-upload"></i> Import proposals</button>
           <input id="proposal-import-file" type="file" accept="application/json,.json" style="display:none" onchange="importProposalFile(event)" />
           <button class="copy-btn" onclick="loadProposals(false)"><i class="ti ti-refresh"></i> Refresh</button>
         </div>
@@ -514,20 +564,115 @@
     </section>
   </div>
 
+  <dialog class="attachment-viewer" id="attachment-viewer" onclick="closeAttachmentViewerFromBackdrop(event)">
+    <div class="attachment-viewer-shell">
+      <div class="attachment-viewer-head">
+        <div class="attachment-viewer-title" id="attachment-viewer-title">Attachment</div>
+        <div class="attachment-viewer-actions">
+          <button class="copy-btn" id="attachment-download-btn" type="button" title="Download file"><i class="ti ti-download"></i> Download</button>
+          <button class="icon-btn" type="button" title="Close preview" onclick="closeAttachmentViewer()"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="attachment-viewer-body" id="attachment-viewer-body"></div>
+    </div>
+  </dialog>
+
+  <dialog class="attachment-viewer" id="update-confirm-dialog">
+    <div class="attachment-viewer-shell">
+      <div class="attachment-viewer-head">
+        <div class="attachment-viewer-title">Confirm Scout update</div>
+        <div class="attachment-viewer-actions">
+          <button class="copy-btn" id="apply-update-btn" type="button" onclick="applyPendingProposalUpdate()"><i class="ti ti-check"></i> Apply update</button>
+          <button class="icon-btn" type="button" title="Close" onclick="closeUpdateConfirmDialog()"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="attachment-viewer-body" style="display:block; background:var(--bg);">
+        <p class="update-confirm-note">Scout read the update and proposes these changes. Edit anything here before saving to the database.</p>
+        <div class="update-confirm-grid">
+          <label class="wide">Proposal name<input id="confirm-proposal-name"></label>
+          <label>Type<select id="confirm-opportunity-type"></select></label>
+          <label>Engagement date<input id="confirm-timeline"></label>
+          <label>Budget<input id="confirm-budget"></label>
+          <label>Location<input id="confirm-location"></label>
+          <label>Requester<input id="confirm-requester"></label>
+          <label class="wide">Requester context<textarea id="confirm-requester-context"></textarea></label>
+          <label class="wide">Summary<textarea id="confirm-summary"></textarea></label>
+          <label class="wide">Ask<textarea id="confirm-ask"></textarea></label>
+          <label class="wide">Next step<textarea id="confirm-next-step"></textarea></label>
+          <label class="wide">Reason<textarea id="confirm-reason"></textarea></label>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="attachment-viewer" id="original-submission-dialog" onclick="closeOriginalSubmissionViewerFromBackdrop(event)">
+    <div class="attachment-viewer-shell">
+      <div class="attachment-viewer-head">
+        <div class="attachment-viewer-title" id="original-submission-title">Original submission</div>
+        <div class="attachment-viewer-actions">
+          <button class="copy-btn" type="button" id="copy-original-text-btn"><i class="ti ti-copy"></i> Copy text</button>
+          <button class="icon-btn" type="button" title="Close preview" onclick="closeOriginalSubmissionViewer()"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="attachment-viewer-body" id="original-submission-body"></div>
+    </div>
+  </dialog>
+
+  <dialog class="summary-dialog" id="nuseir-summary-dialog">
+    <div class="summary-shell">
+      <div class="attachment-viewer-head">
+        <div class="attachment-viewer-title">Pending Nuseir's Decision</div>
+        <div class="attachment-viewer-actions">
+          <button class="copy-btn" type="button" onclick="copyNuseirSummary()"><i class="ti ti-copy"></i> Copy summary</button>
+          <button class="copy-btn" id="send-test-digest-btn" type="button" onclick="sendTestNuseirDigest()"><i class="ti ti-send"></i> Send test to Lark</button>
+          <button class="icon-btn" type="button" title="Close" onclick="closeNuseirSummaryDialog()"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="summary-body">
+        <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong>. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
+        <textarea id="nuseir-summary-output" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </dialog>
+
   <script>
+    const pendingNuseirStatus = 'Pending Nuseir';
     const images = [];
     let lastLarkMessage = '';
     let lastAssessment = null;
     let proposalDatabaseOpen = false;
+    let proposalAccessRole = 'admin';
     let proposalLoadTimer = null;
     let sourcePreviewUrls = [];
+    let attachmentPreviewUrl = '';
+    let originalSubmissionText = '';
     let loadedProposals = new Map();
+    let updateImages = new Map();
+    let pendingProposalUpdate = null;
+    const pageParams = new URLSearchParams(window.location.search);
+    const pageMode = pageParams.get('view') || '';
+    const focusedProposalId = Number(pageParams.get('proposal') || 0);
     const dropZone = document.getElementById('drop-zone');
     const previewGrid = document.getElementById('preview-grid');
     const dropInner = document.getElementById('drop-inner');
     const fileInput = document.getElementById('file-input');
+    document.getElementById('attachment-viewer').addEventListener('close', () => {
+      document.getElementById('attachment-viewer-body').innerHTML = '';
+      if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
+      attachmentPreviewUrl = '';
+    });
+    document.getElementById('original-submission-dialog').addEventListener('close', () => {
+      document.getElementById('original-submission-body').innerHTML = '';
+      originalSubmissionText = '';
+    });
 
-    window.addEventListener('load', retryPendingLarkTodo);
+    window.addEventListener('load', () => {
+      if (pageMode === 'database') {
+        document.body.classList.add('database-only');
+        loadProposals();
+      }
+      retryPendingLarkTodo();
+    });
     fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -891,6 +1036,48 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return parts.length ? parts.join(' ') : 'Scout found limited evidence that this opportunity justifies Nuseir’s time.';
     }
 
+    function buildProposalPermalink(id) {
+      return `${window.location.origin}/?view=database&proposal=${encodeURIComponent(id)}`;
+    }
+
+    function buildBestProposalLink(proposal) {
+      const larkMessageLink = String(proposal?.lark_message_link || '').trim();
+      if (larkMessageLink) return larkMessageLink;
+      return buildProposalPermalink(proposal?.id);
+    }
+
+    function isUrgentProposal(proposal) {
+      const timestamp = parseEngagementDate(proposal.event_date || proposal.assessment?.timeline);
+      if (timestamp === Number.MAX_SAFE_INTEGER) return false;
+      const dayMs = 24 * 60 * 60 * 1000;
+      const diffDays = Math.ceil((timestamp - Date.now()) / dayMs);
+      return diffDays <= 3;
+    }
+
+    function buildNuseirSummary() {
+      const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
+      const footer = `\n\n[View all active proposals here](https://nasdailycollabassessor.onrender.com/?view=database)\nPassword: NasMeansPeople`;
+      if (!pending.length) {
+        return `Hey Nuseir! No proposals are currently marked "${pendingNuseirStatus}".${footer}`;
+      }
+      const lines = [
+        `Hey Nuseir! ${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
+        ''
+      ];
+      const sortedPending = [...pending].sort((a, b) => {
+        const urgentDiff = Number(isUrgentProposal(b)) - Number(isUrgentProposal(a));
+        if (urgentDiff !== 0) return urgentDiff;
+        return compareProposalDates(a, b);
+      });
+      for (const proposal of sortedPending) {
+        const assessment = proposal.assessment || {};
+        const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
+        const prefix = isUrgentProposal(proposal) ? '• 🔴 Urgent ' : '• ';
+        lines.push(`${prefix}**[${title}](${buildBestProposalLink(proposal)})**`);
+      }
+      return `${lines.join('\n').trim()}${footer}`;
+    }
+
     async function copyLarkMessage() {
       const btn = document.querySelector('.copy-btn');
       try {
@@ -908,10 +1095,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function getScoutAdminKey() {
-      let key = localStorage.getItem('scout_admin_key') || '';
+      let key = localStorage.getItem('scout_access_key') || localStorage.getItem('scout_admin_key') || '';
       if (!key) {
-        key = prompt('Enter Patty admin key to use this restricted Scout action:') || '';
-        if (key) localStorage.setItem('scout_admin_key', key);
+        key = prompt('Enter Scout access key:') || '';
+        if (key) {
+          localStorage.setItem('scout_access_key', key);
+          localStorage.setItem('scout_admin_key', key);
+        }
       }
       return key;
     }
@@ -938,6 +1128,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         if (response.status === 403) clearScoutAdminKey();
         if (!response.ok) throw new Error(data.error || 'Could not load proposals.');
         proposalDatabaseOpen = true;
+        proposalAccessRole = data.access_role || 'admin';
+        updateProposalToolbarAccess();
         renderProposalFilters(data.statuses || []);
         renderProposalRows(data.proposals || []);
         document.getElementById('open-database-btn').innerHTML = '<i class="ti ti-database-check"></i> Database open';
@@ -954,6 +1146,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function renderProposalRows(proposals) {
       const rows = document.getElementById('proposal-rows');
+      const readOnly = proposalAccessRole !== 'admin';
       loadedProposals = new Map(proposals.map(proposal => [Number(proposal.id), proposal]));
       if (!proposals.length) {
         rows.innerHTML = '<div class="empty-state">No proposals match this view.</div>';
@@ -964,29 +1157,37 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       sourcePreviewUrls = [];
       rows.innerHTML = sortedProposals.map(proposal => {
         const a = proposal.assessment || {};
-        const statusOptions = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
+        const statusOptions = ['Pending Details', pendingNuseirStatus, 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
           .map(status => `<option${status === proposal.status ? ' selected' : ''}>${status}</option>`).join('');
         const typeOptions = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other']
           .map(type => `<option${type === a.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
         const paymentOptions = ['Pending', 'Paid', 'Pro-Bono'].map(value => `<option${value === proposal.payment_status ? ' selected' : ''}>${value}</option>`).join('');
         const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
-        return `<article class="proposal-record record-${getStatusClass(proposal.status)}">
+        const deleteLabel = escapeHtml(getProposalDeleteLabel(proposal));
+        const sourceBadge = renderMetaBadge(proposal.intake_source || a.intake_source || 'Manual', 'source');
+        const confidenceBadge = renderMetaBadge(proposal.intake_confidence || a.confidence || 'Medium', 'confidence');
+        const reviewBadge = String(a.review_flag || 'Ready') === 'Needs human cleanup' ? renderMetaBadge(a.review_flag, 'review') : '';
+        return `<article class="proposal-record record-${getStatusClass(proposal.status)}" data-proposal-id="${proposal.id}">
           <div class="record-head">
             <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
-            <div><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.opportunity_type || 'Other')} &nbsp;•&nbsp; ${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div></div>
-            <div class="record-field status-wrap"><label>Status</label><select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select><span class="save-state" id="save-${proposal.id}"></span></div>
-            <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
+            <div><div class="proposal-title-row"><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-badges">${sourceBadge}${confidenceBadge}${reviewBadge}</div></div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div>${renderCompactOriginalPreview(proposal)}</div>
+            <div class="record-field status-wrap"><label>Status</label>${readOnly ? `<div class="tracker-input">${escapeHtml(proposal.status || 'Pending Details')}</div>` : `<select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select>`}<span class="save-state" id="save-${proposal.id}"></span></div>
+            ${readOnly ? '' : `<div class="record-actions">
+              <button class="icon-btn" type="button" title="Delete proposal" aria-label="Delete ${deleteLabel}" onclick="deleteProposal(${proposal.id})"><i class="ti ti-trash"></i></button>
+              <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
+            </div>`}
           </div>
-          <details class="record-details about-details"><summary>View full proposal</summary>${renderProposalDetails(proposal)}</details>
-          <div class="record-editor" id="editor-${proposal.id}">
+          <details class="record-details about-details"><summary>View full proposal</summary>${renderProposalDetails(proposal, readOnly)}</details>
+          ${readOnly ? '' : `<div class="record-editor" id="editor-${proposal.id}">
           <div class="record-fields">
             <div class="record-field"><label>Type</label><select class="tracker-select type-select" id="type-${proposal.id}" onchange="saveProposal(${proposal.id})">${typeOptions}</select></div>
             <div class="record-field"><label>Budget</label><input class="tracker-input" id="budget-${proposal.id}" value="${escapeHtml(a.budget || '')}" placeholder="Not stated" onblur="saveProposal(${proposal.id})"></div>
             <div class="record-field"><label>Engagement Date</label><input class="tracker-input" id="date-${proposal.id}" value="${escapeHtml(proposal.event_date || a.timeline || '')}" placeholder="Date not stated" onchange="saveProposal(${proposal.id}, true)"></div>
             <div class="record-field"><label>Location</label><input class="tracker-input" id="location-${proposal.id}" value="${escapeHtml(proposal.location || '')}" placeholder="Location" onblur="saveProposal(${proposal.id})"></div>
+            <div class="record-field"><label>Lark message link</label><input class="tracker-input" id="lark-link-${proposal.id}" value="${escapeHtml(proposal.lark_message_link || '')}" placeholder="Paste Lark card URL" onblur="saveProposal(${proposal.id})"></div>
           </div>
           <hr class="editor-divider"><div class="proposal-detail-grid">
-          <div><div class="field-label"><i class="ti ti-sparkles"></i> Update with Scout</div><textarea class="proposal-notes" id="update-text-${proposal.id}" placeholder="Paste the new email, WhatsApp message, fee, date, or other update..."></textarea><div class="attachment-row"><input type="file" id="update-files-${proposal.id}" accept="image/*" multiple><button class="copy-btn" type="button" onclick="processProposalUpdate(${proposal.id}, event)"><i class="ti ti-sparkles"></i> Read & update fields</button></div><div class="field-label" style="margin-top:18px"><i class="ti ti-file-description"></i> Original proposal & update history</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
+          <div><div class="field-label"><i class="ti ti-sparkles"></i> Update with Scout</div><textarea class="proposal-notes" id="update-text-${proposal.id}" placeholder="Paste the new email, WhatsApp message, fee, date, or other update..." onpaste="handleUpdatePaste(event, ${proposal.id})"></textarea><div class="update-preview-grid" id="update-preview-${proposal.id}"></div><div class="attachment-row"><input type="file" id="update-files-${proposal.id}" accept="image/*" multiple onchange="handleUpdateFiles(${proposal.id}, this.files)"><button class="copy-btn" type="button" onclick="processProposalUpdate(${proposal.id}, event)"><i class="ti ti-sparkles"></i> Read & preview changes</button></div><div class="field-label" style="margin-top:18px"><i class="ti ti-file-description"></i> Original proposal & update history</div><textarea class="proposal-notes" id="source-text-${proposal.id}" placeholder="Paste the original email, WhatsApp, or proposal text..." onblur="saveProposal(${proposal.id})">${escapeHtml(cleanSourceText(proposal.source_text))}</textarea><div class="attachment-row"><input type="file" accept="image/*" onchange="uploadProposalFile(${proposal.id}, 'source', this)">${renderAttachments(proposal, 'source')}</div><div class="field-label" style="margin-top:12px"><i class="ti ti-notes"></i> Notes</div><textarea class="proposal-notes" id="notes-${proposal.id}" placeholder="Add context, follow-up, or decision notes..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.notes || '')}</textarea></div>
           <div class="agreement-panel" id="agreement-${proposal.id}" style="display:${agreed ? 'block' : 'none'}">
             <div class="field-label"><i class="ti ti-file-dollar"></i> Agreement & payment</div>
             <div class="agreement-grid">
@@ -996,15 +1197,28 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
               <label>Patty's commission</label><textarea class="proposal-notes" id="commission-${proposal.id}" placeholder="Amount, percentage, payment timing, or calculation..." onblur="saveProposal(${proposal.id})">${escapeHtml(proposal.commission_breakdown || '')}</textarea>
             </div>
           </div>
-        </div></div></article>`;
+        </div></div>`}</article>`;
       }).join('');
       loadSourcePreviews();
+      if (focusedProposalId) focusProposalRecord(focusedProposalId);
     }
 
-    function renderProposalDetails(proposal) {
+    function focusProposalRecord(id) {
+      const record = document.querySelector(`.proposal-record.proposal-focus`);
+      if (record) record.classList.remove('proposal-focus');
+      const proposalNode = document.querySelector(`.proposal-record[data-proposal-id="${id}"]`);
+      if (!proposalNode) return;
+      proposalNode.classList.add('proposal-focus');
+      const details = proposalNode.querySelector('.record-details');
+      if (details) details.open = true;
+      proposalNode.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderProposalDetails(proposal, readOnly = false) {
       const a = proposal.assessment || {};
       const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
       const text = cleanSourceText(proposal.source_text);
+      const locationValue = escapeHtml(proposal.location || a.location || '');
       const original = sourceFiles.length || text
         ? `${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}${text ? `<div class="original-text">${escapeHtml(text)}</div>` : ''}`
         : '<div class="original-text">Original screenshots or pasted text were not stored for this historical record. Add them with the pencil button.</div>';
@@ -1012,19 +1226,43 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         <div class="assessment-detail">
           <div class="detail-section"><div class="detail-heading">Summary</div><div class="detail-text">${escapeHtml(a.proposal_summary || 'Not stated')}</div></div>
           <div class="detail-section"><div class="detail-facts">
+            <strong>Source</strong><span>${escapeHtml(proposal.intake_source || a.intake_source || 'Manual')}</span>
+            <strong>Confidence</strong><span>${escapeHtml(proposal.intake_confidence || a.confidence || 'Medium')}</span>
+            <strong>Review Status</strong><span>${escapeHtml(a.review_flag || 'Ready')}</span>
             <strong>Requester</strong><span>${escapeHtml(a.requester_name || 'Not stated')}</span>
             <strong>Requester Context</strong><span>${escapeHtml(a.requester_context || 'Not verified')}</span>
-            <strong>Timeline</strong><span>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</span>
+            <strong>Date / Timeline</strong><span>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</span>
+            <strong>Location</strong>${readOnly ? `<span>${escapeHtml(proposal.location || a.location || 'Not stated')}</span>` : `<input class="inline-detail-input" value="${locationValue}" placeholder="Not stated" onblur="saveProposalLocation(${proposal.id}, this.value)">`}
             <strong>Budget</strong><span>${escapeHtml(a.budget || 'Not stated')}</span>
             <strong>Website/Social Links</strong><span>${linkifyText(a.social_links || 'Not stated')}</span>
           </div></div>
-          <div class="detail-section"><div class="detail-heading">Opportunity Type</div><div class="detail-text">${escapeHtml(a.opportunity_type || 'Other')}</div></div>
-          <div class="detail-section"><div class="detail-heading">Ask</div><div class="detail-text">${escapeHtml(a.ask || 'Not stated')}</div></div>
-          <div class="detail-section"><div class="detail-heading">Next Step</div><div class="detail-text">${escapeHtml(a.next_step || 'Not stated')}</div></div>
-          <div class="detail-section"><div class="detail-heading">Reason</div><div class="detail-text">${escapeHtml(a.decision_reason || a.one_line_take || 'Not stated')}</div></div>
+          <div class="detail-section"><div class="detail-heading">Deliverables</div><div class="detail-text">${escapeHtml(a.ask || a.deliverables || 'Not stated')}</div></div>
         </div>
         <div class="original-heading">Original submission</div>
         ${original}
+      </div>`;
+    }
+
+    function renderCompactOriginalPreview(proposal) {
+      const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
+      const text = cleanSourceText(proposal.source_text);
+      const sourceCount = sourceFiles.length;
+      const textSnippet = text ? text.split(/\r?\n/).filter(Boolean).join(' ').replace(/\s+/g, ' ').slice(0, 220) : '';
+
+      if (!sourceCount && !textSnippet) {
+        return `<div class="original-preview-empty"><strong>Original submission not stored here yet.</strong><br>Add the email, WhatsApp text, or a screenshot in the editor to keep the source attached to this proposal.</div>`;
+      }
+
+      return `<div class="original-preview">
+        ${sourceCount ? `<img class="original-preview-thumb" data-source-file="${sourceFiles[0].id}" alt="Original proposal screenshot">` : `<div class="original-preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:11px;text-align:center;padding:10px;">Email text</div>`}
+        <div class="original-preview-body">
+          <div class="original-preview-label">Original source</div>
+          <div class="original-preview-title">${sourceCount ? `${sourceCount} screenshot${sourceCount === 1 ? '' : 's'} attached` : 'Email / WhatsApp text'}</div>
+          <div class="original-preview-text">${escapeHtml(textSnippet || 'Open the source to view the full original message.')}</div>
+        </div>
+        <div class="original-preview-actions">
+          <button class="copy-btn" type="button" onclick="openOriginalSubmissionViewer(${proposal.id})"><i class="ti ti-eye"></i> View original</button>
+        </div>
       </div>`;
     }
 
@@ -1063,6 +1301,38 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           img.src = url;
         } catch {}
       }));
+    }
+
+    function openOriginalSubmissionViewer(proposalId) {
+      const proposal = loadedProposals.get(Number(proposalId));
+      if (!proposal) return;
+      const a = proposal.assessment || {};
+      originalSubmissionText = cleanSourceText(proposal.source_text);
+      const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
+      const dialog = document.getElementById('original-submission-dialog');
+      const body = document.getElementById('original-submission-body');
+      document.getElementById('original-submission-title').textContent = a.proposal_name || a.brand || 'Original submission';
+      document.getElementById('copy-original-text-btn').onclick = async () => {
+        await navigator.clipboard.writeText(originalSubmissionText || '');
+      };
+      body.innerHTML = `
+        <div class="summary-body" style="padding:16px;">
+          ${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}
+          ${originalSubmissionText ? `<div class="original-text" style="max-height: none; margin-top: 2px;">${escapeHtml(originalSubmissionText)}</div>` : '<div class="attachment-unavailable"><i class="ti ti-file-text"></i><p>No original email text was stored for this proposal.</p></div>'}
+        </div>`;
+      dialog.showModal();
+      loadSourcePreviews();
+    }
+
+    function closeOriginalSubmissionViewer() {
+      const dialog = document.getElementById('original-submission-dialog');
+      if (dialog.open) dialog.close();
+      document.getElementById('original-submission-body').innerHTML = '';
+      originalSubmissionText = '';
+    }
+
+    function closeOriginalSubmissionViewerFromBackdrop(event) {
+      if (event.target === event.currentTarget) closeOriginalSubmissionViewer();
     }
 
     function openSourcePreview(fileId) {
@@ -1109,7 +1379,19 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function renderAttachments(proposal, kind) {
-      return `<div class="attachment-row">${(proposal.attachments || []).filter(file => file.kind === kind).map(file => `<span class="attachment-chip"><button type="button" onclick="downloadProposalFile(${file.id}, decodeURIComponent('${encodeURIComponent(file.file_name)}'))"><i class="ti ti-paperclip"></i> ${escapeHtml(file.file_name)}</button><button type="button" title="Delete" onclick="deleteProposalFile(${file.id})"><i class="ti ti-x"></i></button></span>`).join('')}</div>`;
+      return `<div class="attachment-row">${(proposal.attachments || []).filter(file => file.kind === kind).map(file => `<span class="attachment-chip"><button class="attachment-open" type="button" title="Preview file" onclick="openAttachmentViewer(${file.id}, decodeURIComponent('${encodeURIComponent(file.file_name)}'), decodeURIComponent('${encodeURIComponent(file.mime_type || '')}'))"><i class="ti ti-paperclip"></i> ${escapeHtml(file.file_name)}</button><button type="button" title="Delete" onclick="deleteProposalFile(${file.id})"><i class="ti ti-x"></i></button></span>`).join('')}</div>`;
+    }
+
+    function getProposalDeleteLabel(proposal) {
+      const assessment = proposal?.assessment || {};
+      return assessment.proposal_name || assessment.brand || `proposal #${proposal?.id || ''}`.trim();
+    }
+
+    function renderMetaBadge(value, kind) {
+      const text = String(value || '').trim();
+      if (!text) return '';
+      const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      return `<span class="meta-badge ${kind}-${slug}">${escapeHtml(text)}</span>`;
     }
 
     function toggleAgreementFields(id) {
@@ -1136,6 +1418,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
             budget: document.getElementById(`budget-${id}`).value,
             eventDate: document.getElementById(`date-${id}`).value,
             location: document.getElementById(`location-${id}`).value,
+            larkMessageLink: document.getElementById(`lark-link-${id}`)?.value || '',
             paymentStatus: document.getElementById(`payment-${id}`)?.value || 'Pending',
             commissionBreakdown: document.getElementById(`commission-${id}`)?.value || '',
             sourceText: document.getElementById(`source-text-${id}`)?.value || ''
@@ -1157,7 +1440,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     async function processProposalUpdate(id, event) {
       const proposal = loadedProposals.get(Number(id));
       const updateText = document.getElementById(`update-text-${id}`).value.trim();
-      const files = Array.from(document.getElementById(`update-files-${id}`).files || []);
+      const files = getUpdateImages(id);
       if (!proposal || (!updateText && !files.length)) return alert('Paste an update or attach at least one screenshot.');
       const button = event?.currentTarget;
       const original = button?.innerHTML;
@@ -1165,8 +1448,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       try {
         const content = [];
         for (const file of files) {
-          if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name} is larger than 10 MB.`);
-          content.push({ type: 'image', source: { type: 'base64', media_type: file.type || 'image/png', data: await fileToBase64(file) } });
+          content.push({ type: 'image', source: { type: 'base64', media_type: file.mediaType || 'image/png', data: file.base64 } });
         }
         const currentRecord = {
           assessment: proposal.assessment || {},
@@ -1183,16 +1465,146 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         const response = await fetch('/api/assess', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
-          body: JSON.stringify({ system, content, updateProposalId: id })
+          body: JSON.stringify({ system, content, updateProposalId: id, previewOnly: true })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Scout could not process this update.');
-        await loadProposals(false);
+        openUpdateConfirmDialog(id, data, updateText, files);
       } catch (error) {
         alert(error.message || 'Scout could not process this update.');
       } finally {
         if (button) { button.disabled = false; button.innerHTML = original; }
       }
+    }
+
+    function getUpdateImages(id) {
+      return updateImages.get(Number(id)) || [];
+    }
+
+    async function handleUpdateFiles(id, files) {
+      for (const file of Array.from(files || [])) await addUpdateImage(id, file);
+      const input = document.getElementById(`update-files-${id}`);
+      if (input) input.value = '';
+    }
+
+    async function handleUpdatePaste(event, id) {
+      const imageItems = Array.from(event.clipboardData?.items || []).filter(item => item.type.startsWith('image/'));
+      if (!imageItems.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      for (const item of imageItems) {
+        const file = item.getAsFile();
+        if (file) await addUpdateImage(id, file);
+      }
+    }
+
+    async function addUpdateImage(id, file) {
+      if (!file.type.startsWith('image/')) return;
+      if (file.size > 10 * 1024 * 1024) return alert(`${file.name || 'Screenshot'} is larger than 10 MB.`);
+      const compressed = await compressImage(file);
+      const dataUrl = await fileToDataUrl(compressed);
+      const current = getUpdateImages(id);
+      current.push({
+        id: Date.now() + Math.random(),
+        name: file.name || 'pasted-screenshot.jpg',
+        mediaType: compressed.type || 'image/jpeg',
+        base64: dataUrl.split(',')[1],
+        dataUrl
+      });
+      updateImages.set(Number(id), current);
+      renderUpdatePreviews(id);
+    }
+
+    function renderUpdatePreviews(id) {
+      const grid = document.getElementById(`update-preview-${id}`);
+      if (!grid) return;
+      grid.innerHTML = getUpdateImages(id).map(img => `
+        <div class="thumb-wrap">
+          <img class="preview-thumb" src="${img.dataUrl}" alt="update screenshot">
+          <button class="remove-img" type="button" onclick="removeUpdateImage(${id}, '${img.id}')" aria-label="Remove">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>`).join('');
+    }
+
+    function removeUpdateImage(id, imageId) {
+      updateImages.set(Number(id), getUpdateImages(id).filter(img => String(img.id) !== String(imageId)));
+      renderUpdatePreviews(id);
+    }
+
+    function openUpdateConfirmDialog(id, assessment, updateText, files) {
+      pendingProposalUpdate = { id: Number(id), assessment, updateText, files };
+      const typeSelect = document.getElementById('confirm-opportunity-type');
+      const types = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
+      typeSelect.innerHTML = types.map(type => `<option${type === assessment.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
+      document.getElementById('confirm-proposal-name').value = assessment.proposal_name || assessment.brand || '';
+      document.getElementById('confirm-timeline').value = assessment.timeline || '';
+      document.getElementById('confirm-budget').value = assessment.budget || '';
+      document.getElementById('confirm-location').value = assessment.location || '';
+      document.getElementById('confirm-requester').value = assessment.requester_name || '';
+      document.getElementById('confirm-requester-context').value = assessment.requester_context || '';
+      document.getElementById('confirm-summary').value = assessment.proposal_summary || '';
+      document.getElementById('confirm-ask').value = assessment.ask || '';
+      document.getElementById('confirm-next-step').value = assessment.next_step || '';
+      document.getElementById('confirm-reason').value = assessment.decision_reason || assessment.one_line_take || '';
+      document.getElementById('update-confirm-dialog').showModal();
+    }
+
+    function readConfirmedAssessment() {
+      const assessment = { ...(pendingProposalUpdate?.assessment || {}) };
+      assessment.proposal_name = document.getElementById('confirm-proposal-name').value.trim() || assessment.proposal_name || assessment.brand || 'Untitled opportunity';
+      assessment.opportunity_type = document.getElementById('confirm-opportunity-type').value;
+      assessment.timeline = document.getElementById('confirm-timeline').value.trim() || 'Not stated';
+      assessment.budget = document.getElementById('confirm-budget').value.trim() || 'Not stated';
+      assessment.location = document.getElementById('confirm-location').value.trim() || 'Not stated';
+      assessment.requester_name = document.getElementById('confirm-requester').value.trim() || 'Not stated';
+      assessment.requester_context = document.getElementById('confirm-requester-context').value.trim() || 'Not verified';
+      assessment.proposal_summary = document.getElementById('confirm-summary').value.trim() || 'Not stated';
+      assessment.ask = document.getElementById('confirm-ask').value.trim() || 'Not stated';
+      assessment.next_step = document.getElementById('confirm-next-step').value.trim() || 'Not stated';
+      assessment.decision_reason = document.getElementById('confirm-reason').value.trim() || assessment.decision_reason || 'Not stated';
+      return assessment;
+    }
+
+    async function applyPendingProposalUpdate() {
+      if (!pendingProposalUpdate) return;
+      const button = document.getElementById('apply-update-btn');
+      const original = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner"></span> Saving...';
+      try {
+        const response = await fetch(`/api/proposals/${pendingProposalUpdate.id}/apply-update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': getScoutAdminKey() },
+          body: JSON.stringify({
+            assessment: readConfirmedAssessment(),
+            updateText: pendingProposalUpdate.updateText,
+            screenshots: pendingProposalUpdate.files.map(file => ({
+              mediaType: file.mediaType,
+              data: file.base64
+            }))
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not save Scout update.');
+        const id = pendingProposalUpdate.id;
+        updateImages.set(Number(id), []);
+        document.getElementById(`update-text-${id}`).value = '';
+        renderUpdatePreviews(id);
+        closeUpdateConfirmDialog();
+        await loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Could not save Scout update.');
+      } finally {
+        button.disabled = false;
+        button.innerHTML = original;
+      }
+    }
+
+    function closeUpdateConfirmDialog() {
+      const dialog = document.getElementById('update-confirm-dialog');
+      if (dialog.open) dialog.close();
+      pendingProposalUpdate = null;
     }
 
     async function uploadProposalFile(proposalId, kind, input) {
@@ -1222,6 +1634,15 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       });
     }
 
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
     async function downloadProposalFile(fileId, fileName) {
       const response = await fetch(`/api/proposals/files/${fileId}`, { headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
       if (!response.ok) return alert('Could not download attachment.');
@@ -1229,11 +1650,123 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const link = document.createElement('a'); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url);
     }
 
+    async function openAttachmentViewer(fileId, fileName, declaredMimeType) {
+      const dialog = document.getElementById('attachment-viewer');
+      const body = document.getElementById('attachment-viewer-body');
+      document.getElementById('attachment-viewer-title').textContent = fileName;
+      body.innerHTML = '<div class="attachment-unavailable"><span class="spinner"></span><p>Loading preview...</p></div>';
+      document.getElementById('attachment-download-btn').onclick = () => downloadProposalFile(fileId, fileName);
+      dialog.showModal();
+      try {
+        const response = await fetch(`/api/proposals/files/${fileId}`, { headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
+        if (!response.ok) throw new Error('Could not open attachment.');
+        const blob = await response.blob();
+        if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
+        attachmentPreviewUrl = URL.createObjectURL(blob);
+        const mimeType = String(blob.type || declaredMimeType || '').toLowerCase();
+        if (mimeType.startsWith('image/')) {
+          body.innerHTML = `<img src="${attachmentPreviewUrl}" alt="${escapeHtml(fileName)}">`;
+        } else if (mimeType === 'application/pdf') {
+          body.innerHTML = `<iframe src="${attachmentPreviewUrl}" title="${escapeHtml(fileName)}"></iframe>`;
+        } else {
+          body.innerHTML = `<div class="attachment-unavailable"><i class="ti ti-file-description"></i><strong>${escapeHtml(fileName)}</strong><p>This file type cannot be previewed securely in the browser. Download it when you need to open it.</p></div>`;
+        }
+      } catch (error) {
+        body.innerHTML = `<div class="attachment-unavailable"><i class="ti ti-alert-circle"></i><p>${escapeHtml(error.message || 'Could not open attachment.')}</p></div>`;
+      }
+    }
+
+    function closeAttachmentViewer() {
+      const dialog = document.getElementById('attachment-viewer');
+      if (dialog.open) dialog.close();
+      document.getElementById('attachment-viewer-body').innerHTML = '';
+      if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
+      attachmentPreviewUrl = '';
+    }
+
+    function closeAttachmentViewerFromBackdrop(event) {
+      if (event.target === event.currentTarget) closeAttachmentViewer();
+    }
+
     async function deleteProposalFile(fileId) {
       if (!confirm('Delete this attachment?')) return;
       const response = await fetch(`/api/proposals/files/${fileId}`, { method: 'DELETE', headers: { 'X-Scout-Admin-Key': getScoutAdminKey() } });
       if (!response.ok) return alert('Could not delete attachment.');
       loadProposals(false);
+    }
+
+    async function deleteProposal(id) {
+      const proposal = loadedProposals.get(Number(id));
+      const label = getProposalDeleteLabel(proposal);
+      const confirmation = prompt(`Delete "${label}"?\n\nType DELETE to confirm. This removes the proposal and all its stored attachments.`);
+      if (confirmation !== 'DELETE') return;
+      try {
+        const response = await fetch(`/api/proposals/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-Scout-Admin-Key': getScoutAdminKey() }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Could not delete proposal.');
+        await loadProposals(false);
+      } catch (error) {
+        alert(error.message || 'Could not delete proposal.');
+      }
+    }
+
+    async function saveProposalLocation(id, value) {
+      const editorInput = document.getElementById(`location-${id}`);
+      if (editorInput) editorInput.value = value;
+      await saveProposal(id);
+    }
+
+    function openNuseirSummaryDialog() {
+      const output = document.getElementById('nuseir-summary-output');
+      output.value = buildNuseirSummary();
+      document.getElementById('nuseir-summary-dialog').showModal();
+    }
+
+    function closeNuseirSummaryDialog() {
+      const dialog = document.getElementById('nuseir-summary-dialog');
+      if (dialog.open) dialog.close();
+    }
+
+    async function copyNuseirSummary() {
+      const output = document.getElementById('nuseir-summary-output');
+      output.focus();
+      output.select();
+      try {
+        await navigator.clipboard.writeText(output.value);
+      } catch {
+        document.execCommand('copy');
+      }
+    }
+
+    async function sendTestNuseirDigest() {
+      const button = document.getElementById('send-test-digest-btn');
+      const original = button?.innerHTML;
+      try {
+        const adminKey = getScoutAdminKey();
+        if (!adminKey) return;
+        if (button) {
+          button.disabled = true;
+          button.innerHTML = '<span class="spinner"></span> Sending...';
+        }
+        const response = await fetch('/api/nuseir-digest/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Scout-Admin-Key': adminKey }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 403) clearScoutAdminKey();
+        if (!response.ok) throw new Error(data.error || 'Could not send the test digest.');
+        alert(`Test digest sent to Lark (${data.proposals || 0} pending proposal${data.proposals === 1 ? '' : 's'}).`);
+      } catch (error) {
+        alert(error.message || 'Could not send the test digest.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = original;
+        }
+      }
     }
 
     async function downloadProposalCsv() {
@@ -1340,7 +1873,16 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function clearScoutAdminKey() {
+      localStorage.removeItem('scout_access_key');
       localStorage.removeItem('scout_admin_key');
+    }
+
+    function updateProposalToolbarAccess() {
+      const readOnly = proposalAccessRole !== 'admin';
+      ['btn-summarize-nuseir', 'btn-full-backup', 'btn-sync-google-sheet', 'btn-import-proposals'].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) button.style.display = readOnly ? 'none' : '';
+      });
     }
 
     async function sendLarkMessage() {
