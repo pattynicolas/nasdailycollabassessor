@@ -18,6 +18,258 @@ const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engag
 const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
 const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
 
+function parseEnvList(value) {
+  return String(value || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function isAllowedLarkMessageTarget(receiveId, receiveIdType) {
+  const allowlist = parseEnvList(process.env.COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS);
+  if (!allowlist.length) return false;
+
+  const candidates = new Set([
+    receiveId,
+    `${receiveIdType}:${receiveId}`,
+    `${receiveIdType}=${receiveId}`
+  ].filter(Boolean));
+
+  return allowlist.some(entry => candidates.has(entry));
+}
+
+function getLarkMessageTarget() {
+  const mode = process.env.COLLAB_ASSESSOR_LARK_MESSAGE_MODE?.trim().toLowerCase() || 'draft_only';
+
+  if (mode === 'live') {
+    const receiveId = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
+      || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
+    const receiveIdType = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE?.trim()
+      || (process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim() ? 'email' : 'open_id');
+    return { mode, receiveId, receiveIdType, label: 'live target' };
+  }
+
+  if (mode === 'test') {
+    const receiveId = process.env.COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID?.trim()
+      || process.env.COLLAB_ASSESSOR_LARK_TEST_EMAIL?.trim();
+    const receiveIdType = process.env.COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID_TYPE?.trim()
+      || (process.env.COLLAB_ASSESSOR_LARK_TEST_EMAIL?.trim() ? 'email' : 'chat_id');
+    return { mode, receiveId, receiveIdType, label: 'test target' };
+  }
+
+  return { mode, receiveId: '', receiveIdType: '', label: 'disabled' };
+}
+
+async function runScoutAssessment({ system, content, updateProposalId = 0 }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    const error = new Error('Missing OPENAI_API_KEY in Render environment variables.');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  if (!system || !Array.isArray(content)) {
+    const error = new Error('Missing assessment content.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const existingProposalId = Number(updateProposalId || 0);
+  if (existingProposalId && !Number.isSafeInteger(existingProposalId)) {
+    const error = new Error('Invalid proposal ID.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const inputContent = content.map(item => {
+    if (item.type === 'text') {
+      return { type: 'input_text', text: item.text };
+    }
+
+    if (item.type === 'image' && item.source?.data) {
+      return {
+        type: 'input_image',
+        image_url: `data:${item.source.media_type || 'image/png'};base64,${item.source.data}`
+      };
+    }
+
+    return null;
+  }).filter(Boolean);
+
+  const openaiResponse = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || 'gpt-4.1',
+      instructions: system,
+      input: [{ role: 'user', content: inputContent }],
+      max_output_tokens: 1600,
+      tools: [{ type: 'web_search' }],
+      tool_choice: 'auto',
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'opportunity_assessment',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              brand: { type: 'string' },
+              proposal_name: { type: 'string' },
+              opportunity_type: {
+                type: 'string',
+                enum: [
+                  'Collaboration / Content Opportunity',
+                  'Speaking Engagement',
+                  'Partnership Proposal',
+                  'Non-Profit / Cause Initiative',
+                  'Media Opportunity',
+                  'Other'
+                ]
+              },
+              verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
+              one_line_take: { type: 'string' },
+              decision_reason: { type: 'string' },
+              proposal_summary: { type: 'string' },
+              requester_name: { type: 'string' },
+              requester_context: { type: 'string' },
+              timeline: { type: 'string' },
+              location: { type: 'string' },
+              budget: { type: 'string' },
+              social_links: { type: 'string' },
+              type_score_label: { type: 'string' },
+              type_score: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+              type_score_reason: { type: 'string' },
+              reach_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+              reach_reason: { type: 'string' },
+              relevance_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+              relevance_reason: { type: 'string' },
+              business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+              business_reason: { type: 'string' },
+              credibility_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
+              credibility_reason: { type: 'string' },
+              time_cost_score: { type: 'string', enum: ['WORTH IT', 'BORDERLINE', 'NOT WORTH IT'] },
+              time_cost_reason: { type: 'string' },
+              ask: { type: 'string' },
+              next_step: { type: 'string' }
+            },
+            required: [
+              'brand',
+              'proposal_name',
+              'opportunity_type',
+              'verdict',
+              'one_line_take',
+              'decision_reason',
+              'proposal_summary',
+              'requester_name',
+              'requester_context',
+              'timeline',
+              'location',
+              'budget',
+              'social_links',
+              'type_score_label',
+              'type_score',
+              'type_score_reason',
+              'reach_score',
+              'reach_reason',
+              'relevance_score',
+              'relevance_reason',
+              'business_score',
+              'business_reason',
+              'credibility_score',
+              'credibility_reason',
+              'time_cost_score',
+              'time_cost_reason',
+              'ask',
+              'next_step'
+            ]
+          }
+        }
+      }
+    })
+  });
+
+  const data = await openaiResponse.json();
+  if (!openaiResponse.ok) {
+    const error = new Error(data.error?.message || 'OpenAI request failed.');
+    error.statusCode = openaiResponse.status;
+    throw error;
+  }
+
+  const outputText = data.output_text || (data.output || [])
+    .flatMap(item => item.content || [])
+    .filter(part => part.type === 'output_text')
+    .map(part => part.text)
+    .join('');
+
+  if (!outputText) {
+    const error = new Error('OpenAI returned no assessment text.');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const assessment = JSON.parse(outputText);
+  if (pool) {
+    try {
+      await databaseReady;
+      const rawSourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n');
+      const additionalMarker = 'Additional text:\n';
+      const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : '').slice(0, 50000);
+      let saved;
+      if (existingProposalId) {
+        const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
+        if (!current.rowCount) {
+          const error = new Error('Proposal not found.');
+          error.statusCode = 404;
+          throw error;
+        }
+        const prior = current.rows[0];
+        const mergedSource = [prior.source_text, sourceText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
+        const proposedDate = String(assessment.timeline || '').trim();
+        const proposedLocation = String(assessment.location || '').trim();
+        const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
+        const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
+        saved = await pool.query(
+          `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
+           WHERE id = $5 RETURNING id, created_at, status`,
+          [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
+        );
+      } else {
+        saved = await pool.query(
+          'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
+          [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
+        );
+      }
+      let screenshotIndex = 0;
+      for (const item of content.filter(item => item.type === 'image' && item.source?.data)) {
+        const imageData = Buffer.from(item.source.data, 'base64');
+        if (!imageData.length || imageData.length > 10 * 1024 * 1024) continue;
+        screenshotIndex += 1;
+        const mimeType = String(item.source.media_type || 'image/jpeg');
+        const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+        await pool.query(
+          `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
+           VALUES ($1, 'source', $2, $3, $4, $5)`,
+          [saved.rows[0].id, `${existingProposalId ? 'proposal-update' : 'proposal-screenshot'}-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
+        );
+      }
+      assessment.proposal_record = saved.rows[0];
+      syncGoogleSheetSoon();
+    } catch (databaseError) {
+      console.error('Assessment succeeded but database save failed:', databaseError.message);
+      assessment.database_warning = 'Assessment completed, but it was not saved to the proposal database.';
+    }
+  } else {
+    assessment.database_warning = 'Assessment completed, but DATABASE_URL is not configured.';
+  }
+
+  return assessment;
+}
+
 function proposalSheetRow(row) {
   const a = row.assessment || {};
   return [row.id, row.created_at, row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes].map(value => value ?? '');
@@ -371,203 +623,87 @@ app.get('/api/lark/oauth/callback', async (req, res) => {
 });
 
 app.post('/api/assess', async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Missing OPENAI_API_KEY in Render environment variables.' });
-  }
-
   try {
     const { system, content, updateProposalId } = req.body || {};
-    if (!system || !Array.isArray(content)) {
-      return res.status(400).json({ error: 'Missing assessment content.' });
-    }
     const existingProposalId = Number(updateProposalId || 0);
     if (existingProposalId && !isAuthorizedAdmin(req)) {
       return res.status(403).json({ error: 'Not authorized. Updating existing proposals is restricted to Patty.' });
     }
-
-    const inputContent = content.map(item => {
-      if (item.type === 'text') {
-        return { type: 'input_text', text: item.text };
-      }
-
-      if (item.type === 'image' && item.source?.data) {
-        return {
-          type: 'input_image',
-          image_url: `data:${item.source.media_type || 'image/png'};base64,${item.source.data}`
-        };
-      }
-
-      return null;
-    }).filter(Boolean);
-
-    const openaiResponse = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-4.1',
-        instructions: system,
-        input: [{ role: 'user', content: inputContent }],
-        max_output_tokens: 1600,
-        tools: [{ type: 'web_search' }],
-        tool_choice: 'auto',
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'opportunity_assessment',
-            strict: true,
-            schema: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                brand: { type: 'string' },
-                proposal_name: { type: 'string' },
-                opportunity_type: {
-                  type: 'string',
-                  enum: [
-                    'Collaboration / Content Opportunity',
-                    'Speaking Engagement',
-                    'Partnership Proposal',
-                    'Non-Profit / Cause Initiative',
-                    'Media Opportunity',
-                    'Other'
-                  ]
-                },
-                verdict: { type: 'string', enum: ['YES', 'MAYBE', 'NO'] },
-                one_line_take: { type: 'string' },
-                decision_reason: { type: 'string' },
-                proposal_summary: { type: 'string' },
-                requester_name: { type: 'string' },
-                requester_context: { type: 'string' },
-                timeline: { type: 'string' },
-                location: { type: 'string' },
-                budget: { type: 'string' },
-                social_links: { type: 'string' },
-                type_score_label: { type: 'string' },
-                type_score: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
-                type_score_reason: { type: 'string' },
-                reach_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                reach_reason: { type: 'string' },
-                relevance_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                relevance_reason: { type: 'string' },
-                business_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                business_reason: { type: 'string' },
-                credibility_score: { type: 'string', enum: ['STRONG', 'MEDIUM', 'WEAK'] },
-                credibility_reason: { type: 'string' },
-                time_cost_score: { type: 'string', enum: ['WORTH IT', 'BORDERLINE', 'NOT WORTH IT'] },
-                time_cost_reason: { type: 'string' },
-                ask: { type: 'string' },
-                next_step: { type: 'string' }
-              },
-              required: [
-                'brand',
-                'proposal_name',
-                'opportunity_type',
-                'verdict',
-                'one_line_take',
-                'decision_reason',
-                'proposal_summary',
-                'requester_name',
-                'requester_context',
-                'timeline',
-                'location',
-                'budget',
-                'social_links',
-                'type_score_label',
-                'type_score',
-                'type_score_reason',
-                'reach_score',
-                'reach_reason',
-                'relevance_score',
-                'relevance_reason',
-                'business_score',
-                'business_reason',
-                'credibility_score',
-                'credibility_reason',
-                'time_cost_score',
-                'time_cost_reason',
-                'ask',
-                'next_step'
-              ]
-            }
-          }
-        }
-      })
-    });
-
-    const data = await openaiResponse.json();
-    if (!openaiResponse.ok) {
-      return res.status(openaiResponse.status).json({
-        error: data.error?.message || 'OpenAI request failed.'
-      });
-    }
-
-    const outputText = data.output_text || (data.output || [])
-      .flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text')
-      .map(part => part.text)
-      .join('');
-
-    if (!outputText) {
-      return res.status(500).json({ error: 'OpenAI returned no assessment text.' });
-    }
-
-    const assessment = JSON.parse(outputText);
-    if (pool) {
-      try {
-        await databaseReady;
-        const rawSourceText = content.filter(item => item.type === 'text').map(item => item.text || '').join('\n\n');
-        const additionalMarker = 'Additional text:\n';
-        const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : '').slice(0, 50000);
-        let saved;
-        if (existingProposalId) {
-          const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
-          if (!current.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
-          const prior = current.rows[0];
-          const mergedSource = [prior.source_text, sourceText].filter(Boolean).join('\n\n--- Update ---\n\n').slice(0, 50000);
-          const proposedDate = String(assessment.timeline || '').trim();
-          const proposedLocation = String(assessment.location || '').trim();
-          const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
-          const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
-          saved = await pool.query(
-            `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
-             WHERE id = $5 RETURNING id, created_at, status`,
-            [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
-          );
-        } else {
-          saved = await pool.query(
-            'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
-            [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
-          );
-        }
-        let screenshotIndex = 0;
-        for (const item of content.filter(item => item.type === 'image' && item.source?.data)) {
-          const imageData = Buffer.from(item.source.data, 'base64');
-          if (!imageData.length || imageData.length > 10 * 1024 * 1024) continue;
-          screenshotIndex += 1;
-          const mimeType = String(item.source.media_type || 'image/jpeg');
-          const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
-          await pool.query(
-            `INSERT INTO scout_proposal_files (proposal_id, kind, file_name, mime_type, file_size, file_data)
-             VALUES ($1, 'source', $2, $3, $4, $5)`,
-            [saved.rows[0].id, `${existingProposalId ? 'proposal-update' : 'proposal-screenshot'}-${Date.now()}-${screenshotIndex}.${extension}`, mimeType, imageData.length, imageData]
-          );
-        }
-        assessment.proposal_record = saved.rows[0];
-        syncGoogleSheetSoon();
-      } catch (databaseError) {
-        console.error('Assessment succeeded but database save failed:', databaseError.message);
-        assessment.database_warning = 'Assessment completed, but it was not saved to the proposal database.';
-      }
-    } else {
-      assessment.database_warning = 'Assessment completed, but DATABASE_URL is not configured.';
-    }
+    const assessment = await runScoutAssessment({ system, content, updateProposalId: existingProposalId });
     return res.status(200).json(assessment);
   } catch (error) {
-    return res.status(500).json({ error: error.message || 'Assessment failed.' });
+    return res.status(error.statusCode || 500).json({ error: error.message || 'Assessment failed.' });
+  }
+});
+
+app.post('/api/inbound-email', async (req, res) => {
+  try {
+    const inboundSecret = process.env.SCOUT_INBOUND_EMAIL_SECRET?.trim();
+    const providedSecret = String(req.get('X-Scout-Inbound-Secret') || req.body?.secret || '').trim();
+    if (!inboundSecret) {
+      return res.status(500).json({ error: 'SCOUT_INBOUND_EMAIL_SECRET is not configured in Render.' });
+    }
+    if (!providedSecret || providedSecret !== inboundSecret) {
+      return res.status(403).json({ error: 'Invalid inbound email secret.' });
+    }
+
+    const email = req.body || {};
+    const from = String(email.from || 'Not stated').trim();
+    const to = String(email.to || 'Not stated').trim();
+    const subject = String(email.subject || 'Untitled proposal').trim();
+    const text = String(email.text || email.body || '').trim();
+    const html = String(email.html || '').trim();
+    const messageId = String(email.messageId || email.message_id || '').trim();
+    const attachments = Array.isArray(email.attachments) ? email.attachments : [];
+
+    const attachmentSummary = attachments.length
+      ? attachments.map((file, index) => `${index + 1}. ${String(file.fileName || file.name || 'attachment').trim()} (${String(file.mimeType || file.mime_type || 'unknown').trim()})`).join('\n')
+      : 'No attachments provided.';
+
+    const sourceText = [
+      'Forwarded Scout email',
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      messageId ? `Message ID: ${messageId}` : '',
+      text ? `Body:\n${text}` : '',
+      html ? `HTML:\n${html.slice(0, 12000)}` : '',
+      `Attachments:\n${attachmentSummary}`
+    ].filter(Boolean).join('\n\n').slice(0, 50000);
+
+    const content = [];
+    for (const file of attachments) {
+      const data = String(file.data || file.base64 || '').trim();
+      const mimeType = String(file.mimeType || file.mime_type || '').trim();
+      if (data && mimeType.startsWith('image/')) {
+        content.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mimeType,
+            data
+          }
+        });
+      }
+    }
+    content.push({
+      type: 'text',
+      text: `Scout this opportunity for Nuseir. Classify it first, then evaluate Reach, Relevance, Potential Business, Requester Credibility, Time Cost, and the type-specific opportunity score.\n\nAdditional text:\n${sourceText}`
+    });
+
+    const system = `You are Scout, Patty's opportunity scout for Nuseir Yassin. Assess a forwarded proposal email or WhatsApp message. Return a complete JSON assessment using professional executive English. Rewrite awkward wording, extract requester details, timeline, budget, location, website/social links, and the request itself. Be conservative with Nuseir's time and preserve verified facts unless contradicted.`;
+    const assessment = await runScoutAssessment({ system, content });
+    const larkDraft = buildScoutAssessmentCard(assessment, sourceText);
+
+    return res.status(200).json({
+      ok: true,
+      assessment,
+      lark_draft: larkDraft,
+      email: { from, to, subject, messageId },
+      attachment_count: attachments.length
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ error: error.message || 'Could not process inbound email.' });
   }
 });
 
@@ -683,14 +819,26 @@ app.post('/api/lark/message', async (req, res) => {
     return res.status(403).json({ error: 'Not authorized. This action is restricted to Patty.' });
   }
 
-  const receiveId = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID?.trim()
-    || process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim();
-  const receiveIdType = process.env.COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE?.trim()
-    || (process.env.COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL?.trim() ? 'email' : 'open_id');
+  const target = getLarkMessageTarget();
+  const { receiveId, receiveIdType, mode } = target;
+
+  if (mode !== 'test' && mode !== 'live') {
+    return res.status(403).json({
+      error: 'Lark sending is disabled. Set COLLAB_ASSESSOR_LARK_MESSAGE_MODE=test to send to the test chat, or live only when you are ready for the live target.'
+    });
+  }
 
   if (!receiveId) {
     return res.status(500).json({
-      error: 'Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL in Render, or add COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE.'
+      error: mode === 'test'
+        ? 'Test Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID_TYPE in Render.'
+        : 'Live Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL in Render, or add COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE.'
+    });
+  }
+
+  if (!isAllowedLarkMessageTarget(receiveId, receiveIdType)) {
+    return res.status(403).json({
+      error: `Lark sending is locked to the test allowlist. Add the ${target.label} receive ID to COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS in Render, and leave the live group out of that list.`
     });
   }
 

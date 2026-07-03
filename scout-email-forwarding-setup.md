@@ -15,6 +15,8 @@ Inbound endpoint
 
 - `POST /api/inbound-email`
 - Header: `X-Scout-Inbound-Secret: <SCOUT_INBOUND_EMAIL_SECRET>`
+- Forwarding to `scoutproposal@nas.com` only works if your email bridge POSTs that forwarded message to this endpoint.
+- The endpoint stores the proposal, generates Scout's assessment, and returns a `lark_draft` for review.
 
 Sample JSON payload
 
@@ -40,4 +42,14 @@ Expected test behavior
 - Scout assesses the forwarded email
 - Scout saves the proposal to the database
 - Scout returns a `lark_draft`
-- Scout does not send anything to Lark while `SCOUT_EMAIL_AUTOMATION_LARK_MODE=draft_only`
+- Scout does not send anything to live Nuseir unless you explicitly wire a separate approval/send step
+
+Lark send safety for manual messages
+
+- Set `COLLAB_ASSESSOR_LARK_MESSAGE_MODE=test` while testing
+- Add the test chat receive ID to `COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID`
+- Add the matching type to `COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID_TYPE` (usually `chat_id`)
+- Keep `COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID` untouched for the live target
+- Add only the test chat or test user receive ID to `COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS`
+- Do not include the live group receive ID in that list
+- If the allowlist is empty, Scout refuses to send a Lark message
