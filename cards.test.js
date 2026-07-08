@@ -33,7 +33,7 @@ test('buildScoutAssessmentCard uses the simplified latest layout', () => {
   assert.match(card.elements[5].text.content, /💵 Budget/);
   assert.match(card.elements[6].text.content, /📍Location/);
   assert.match(card.elements[7].text.content, /Original source/);
-  assert.match(card.elements[7].text.content, /🔗 CLICK HERE/);
+  assert.match(card.elements[7].text.content, /🔗 View original email\/proposal/);
   assert.match(card.elements[7].text.content, /1 screenshot stored in Scout/);
 });
 

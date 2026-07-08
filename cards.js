@@ -61,7 +61,7 @@ function formatOriginalSummary({ sourceFiles, hasForwardedText }) {
 }
 
 function originalSourceLink(originalLink) {
-  return originalLink ? `[🔗 CLICK HERE](${originalLink})` : '';
+  return originalLink ? `[🔗 View original email/proposal](${originalLink})` : '';
 }
 
 export function buildLarkCardContent(message) {
@@ -124,7 +124,7 @@ export function buildScoutAssessmentCard(assessment, fallbackMessage) {
       md(`**🗓️ Date**\n${formatDateValue(assessment.event_date, assessment.timeline)}`),
       md(`**💵 Budget**\n${assessment.budget || 'Not stated'}`),
       md(`**📍Location**\n${formatLocation(assessment.location)}`),
-      md(`**Original source**\n${formatOriginalSummary({ sourceFiles, hasForwardedText })}${originalLink ? `\nWant to view original proposal/email from sender? ${originalSourceLink(originalLink)}` : ''}`)
+      md(`**Original source**\n${formatOriginalSummary({ sourceFiles, hasForwardedText })}${originalLink ? `\n${originalSourceLink(originalLink)}` : ''}`)
     ]
   };
 }
