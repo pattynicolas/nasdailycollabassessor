@@ -1247,9 +1247,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const sourceFiles = (proposal.attachments || []).filter(file => file.kind === 'source');
       const text = cleanSourceText(proposal.source_text);
       const sourceCount = sourceFiles.length;
-      const textSnippet = text ? text.split(/\r?\n/).filter(Boolean).join(' ').replace(/\s+/g, ' ').slice(0, 220) : '';
 
-      if (!sourceCount && !textSnippet) {
+      if (!sourceCount && !text) {
         return `<div class="original-preview-empty"><strong>Original submission not stored here yet.</strong><br>Add the email, WhatsApp text, or a screenshot in the editor to keep the source attached to this proposal.</div>`;
       }
 
@@ -1257,8 +1256,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         ${sourceCount ? `<img class="original-preview-thumb" data-source-file="${sourceFiles[0].id}" alt="Original proposal screenshot">` : `<div class="original-preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:11px;text-align:center;padding:10px;">Email text</div>`}
         <div class="original-preview-body">
           <div class="original-preview-label">Original source</div>
-          <div class="original-preview-title">${sourceCount ? `${sourceCount} screenshot${sourceCount === 1 ? '' : 's'} attached` : 'Email / WhatsApp text'}</div>
-          <div class="original-preview-text">${escapeHtml(textSnippet || 'Open the source to view the full original message.')}</div>
+          <div class="original-preview-title">${sourceCount ? `${sourceCount} screenshot${sourceCount === 1 ? '' : 's'} attached` : 'Forwarded email text stored in Scout'}</div>
+          <div class="original-preview-text">Open the source viewer to read the full original email, message, or screenshot.</div>
         </div>
         <div class="original-preview-actions">
           <button class="copy-btn" type="button" onclick="openOriginalSubmissionViewer(${proposal.id})"><i class="ti ti-eye"></i> View original</button>
@@ -1316,9 +1315,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         await navigator.clipboard.writeText(originalSubmissionText || '');
       };
       body.innerHTML = `
-        <div class="summary-body" style="padding:16px;">
-          ${sourceFiles.length ? `<div class="source-gallery">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}
-          ${originalSubmissionText ? `<div class="original-text" style="max-height: none; margin-top: 2px;">${escapeHtml(originalSubmissionText)}</div>` : '<div class="attachment-unavailable"><i class="ti ti-file-text"></i><p>No original email text was stored for this proposal.</p></div>'}
+        <div class="summary-body" style="padding:16px; gap: 16px;">
+          <div class="detail-section">
+            <div class="detail-heading">Original source</div>
+            <div class="detail-text">Use the screenshots or the raw text below to inspect exactly what Scout received.</div>
+          </div>
+          ${sourceFiles.length ? `<div class="source-gallery" style="margin:0;">${sourceFiles.map(file => `<button type="button" title="Open screenshot" onclick="openSourcePreview(${file.id})"><img data-source-file="${file.id}" alt="Original proposal screenshot"></button>`).join('')}</div>` : ''}
+          ${originalSubmissionText ? `<div class="detail-section"><div class="detail-heading">Raw message text</div><div class="original-text" style="max-height:none; white-space:pre-wrap;">${escapeHtml(originalSubmissionText)}</div></div>` : '<div class="attachment-unavailable"><i class="ti ti-file-text"></i><p>No original email text was stored for this proposal.</p></div>'}
         </div>`;
       dialog.showModal();
       loadSourcePreviews();
