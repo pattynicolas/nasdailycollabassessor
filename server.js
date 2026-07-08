@@ -672,6 +672,7 @@ app.post('/api/inbound-email', async (req, res) => {
     const html = String(email.html || '').trim();
     const messageId = String(email.messageId || email.message_id || '').trim();
     const attachments = Array.isArray(email.attachments) ? email.attachments : [];
+    const allowDuplicate = String(req.body?.allow_duplicate || req.body?.allowDuplicate || '').trim() === '1';
 
     const attachmentSummary = attachments.length
       ? attachments.map((file, index) => `${index + 1}. ${String(file.fileName || file.name || 'attachment').trim()} (${String(file.mimeType || file.mime_type || 'unknown').trim()})`).join('\n')
@@ -687,6 +688,25 @@ app.post('/api/inbound-email', async (req, res) => {
       html ? `HTML:\n${html.slice(0, 12000)}` : '',
       `Attachments:\n${attachmentSummary}`
     ].filter(Boolean).join('\n\n').slice(0, 50000);
+
+    const duplicateCandidate = pool ? await findPotentialDuplicateProposal({
+      from,
+      to,
+      subject,
+      text,
+      html,
+      messageId,
+      sourceText,
+      attachments
+    }) : null;
+
+    if (duplicateCandidate && !allowDuplicate) {
+      return res.status(409).json({
+        ok: false,
+        duplicate: duplicateCandidate,
+        error: 'This looks like the same proposal as an existing Scout record. Review the match, then retry with allow_duplicate=1 if you want to proceed.'
+      });
+    }
 
     const content = [];
     for (const file of attachments) {
@@ -725,6 +745,7 @@ app.post('/api/inbound-email', async (req, res) => {
       assessment,
       lark_draft: larkDraft,
       lark_send: sendResult,
+      duplicate: duplicateCandidate,
       email: { from, to, subject, messageId },
       attachment_count: attachments.length
     });
@@ -936,6 +957,121 @@ async function sendLarkMessageToTarget({ receiveId, receiveIdType, card }) {
     throw error;
   }
   return { message_id: data.data?.message_id, data };
+}
+
+function normalizeDuplicateText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019']/g, "'")
+    .replace(/[\u201c\u201d"]/g, '"')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractSourceFingerprint(sourceText) {
+  const text = String(sourceText || '');
+  const messageId = (text.match(/Message ID:\s*([^\n]+)/i)?.[1] || '').trim();
+  const subject = (text.match(/Subject:\s*([^\n]+)/i)?.[1] || '').trim();
+  const from = (text.match(/From:\s*([^\n]+)/i)?.[1] || '').trim();
+  return {
+    messageId: normalizeDuplicateText(messageId),
+    subject: normalizeDuplicateText(subject),
+    from: normalizeDuplicateText(from),
+    body: normalizeDuplicateText(text.replace(/^[\s\S]*?Body:\s*/i, ''))
+  };
+}
+
+function sharedTokenCount(a, b) {
+  const left = new Set(normalizeDuplicateText(a).split(' ').filter(Boolean));
+  const right = new Set(normalizeDuplicateText(b).split(' ').filter(Boolean));
+  let count = 0;
+  for (const token of left) {
+    if (right.has(token)) count += 1;
+  }
+  return count;
+}
+
+async function findPotentialDuplicateProposal({ from, subject, text, html, messageId, sourceText, attachments }) {
+  if (!pool) return null;
+  await databaseReady;
+
+  const rows = await pool.query(
+    `SELECT p.id, p.created_at, p.status, p.source_text, p.assessment,
+      COALESCE((SELECT string_agg(f.file_name, '; ') FROM scout_proposal_files f WHERE f.proposal_id = p.id AND f.kind = 'source'), '') AS source_files
+     FROM scout_proposals p
+     ORDER BY p.created_at DESC
+     LIMIT 200`
+  );
+
+  const incoming = {
+    messageId: normalizeDuplicateText(messageId),
+    subject: normalizeDuplicateText(subject),
+    from: normalizeDuplicateText(from),
+    body: normalizeDuplicateText([text, html ? html.slice(0, 5000) : ''].filter(Boolean).join('\n'))
+  };
+  const incomingFingerprint = extractSourceFingerprint(sourceText);
+  const incomingAttachments = Array.isArray(attachments) ? attachments : [];
+  const hasImageAttachment = incomingAttachments.some(file => String(file?.mimeType || file?.mime_type || '').startsWith('image/'));
+
+  let best = null;
+  for (const row of rows.rows) {
+    const a = row.assessment || {};
+    const storedSource = String(row.source_text || '');
+    const storedFingerprint = extractSourceFingerprint(storedSource);
+    const scoreParts = [];
+    let score = 0;
+
+    if (incoming.messageId && storedFingerprint.messageId && incoming.messageId === storedFingerprint.messageId) {
+      score += 100;
+      scoreParts.push('same message ID');
+    }
+
+    if (incoming.subject && storedFingerprint.subject && incoming.subject === storedFingerprint.subject) {
+      score += 25;
+      scoreParts.push('same subject');
+    }
+
+    if (incoming.from && storedFingerprint.from && incoming.from === storedFingerprint.from) {
+      score += 15;
+      scoreParts.push('same sender');
+    }
+
+    const bodyOverlap = sharedTokenCount(incoming.body || incomingFingerprint.body, storedFingerprint.body || storedSource);
+    if (bodyOverlap >= 12) {
+      score += 35;
+      scoreParts.push('strong body overlap');
+    } else if (bodyOverlap >= 6) {
+      score += 20;
+      scoreParts.push('body overlap');
+    }
+
+    const titleOverlap = sharedTokenCount(subject, a.proposal_name || a.brand || '');
+    if (titleOverlap >= 3) {
+      score += 12;
+      scoreParts.push('similar title');
+    }
+
+    if (hasImageAttachment && /screenshot/i.test(String(row.source_files || ''))) {
+      score += 10;
+      scoreParts.push('screenshots present');
+    }
+
+    if (score < 35) continue;
+    if (!best || score > best.score) {
+      const title = a.proposal_name || a.brand || `Proposal #${row.id}`;
+      best = {
+        id: row.id,
+        title,
+        status: row.status,
+        reason: scoreParts.join(', '),
+        score,
+        link: proposalUrl(row.id)
+      };
+    }
+  }
+
+  return best;
 }
 
 async function maybeSendInboundAssessmentToLark({ assessment, sourceText }) {

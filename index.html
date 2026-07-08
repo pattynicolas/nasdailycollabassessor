@@ -1224,7 +1224,6 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         : '<div class="original-text">Original screenshots or pasted text were not stored for this historical record. Add them with the pencil button.</div>';
       return `<div class="original-proposal">
         <div class="assessment-detail">
-          <div class="detail-section"><div class="detail-heading">Summary</div><div class="detail-text">${escapeHtml(a.proposal_summary || 'Not stated')}</div></div>
           <div class="detail-section"><div class="detail-facts">
             <strong>Source</strong><span>${escapeHtml(proposal.intake_source || a.intake_source || 'Manual')}</span>
             <strong>Confidence</strong><span>${escapeHtml(proposal.intake_confidence || a.confidence || 'Medium')}</span>
