@@ -712,14 +712,19 @@ app.post('/api/inbound-email', async (req, res) => {
     const assessment = await runScoutAssessment({ system, content });
     const larkDraft = buildScoutAssessmentCard({
       ...assessment,
-      proposal_record: saved.rows[0],
       source_files: []
     }, sourceText);
+
+    const sendResult = await maybeSendInboundAssessmentToLark({
+      assessment,
+      sourceText
+    });
 
     return res.status(200).json({
       ok: true,
       assessment,
       lark_draft: larkDraft,
+      lark_send: sendResult,
       email: { from, to, subject, messageId },
       attachment_count: attachments.length
     });
@@ -868,32 +873,15 @@ app.post('/api/lark/message', async (req, res) => {
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Missing message draft.' });
     }
-
-    const token = await getLarkTenantAccessToken();
-    const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(receiveIdType)}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        receive_id: receiveId,
-        msg_type: 'interactive',
-        content: JSON.stringify(assessment
-          ? buildScoutAssessmentCard(assessment, String(message).trim())
-          : buildLarkCardContent(String(message).trim()))
-      })
+    const result = await sendLarkMessageToTarget({
+      receiveId,
+      receiveIdType,
+      card: assessment
+        ? buildScoutAssessmentCard(assessment, String(message).trim())
+        : buildLarkCardContent(String(message).trim())
     });
-    const data = await response.json().catch(() => ({}));
 
-    if (!response.ok || data.code) {
-      return res.status(response.ok ? 500 : response.status).json({
-        error: data.msg || data.error?.message || 'Could not send Lark message.',
-        details: data
-      });
-    }
-
-    return res.status(200).json({ ok: true, message_id: data.data?.message_id, data });
+    return res.status(200).json({ ok: true, message_id: result.message_id, data: result.data });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
   }
@@ -924,6 +912,68 @@ function timingSafeEqual(a, b) {
   const bBuffer = Buffer.from(b);
   if (aBuffer.length !== bBuffer.length) return false;
   return crypto.timingSafeEqual(aBuffer, bBuffer);
+}
+
+async function sendLarkMessageToTarget({ receiveId, receiveIdType, card }) {
+  const token = await getLarkTenantAccessToken();
+  const response = await fetch(`https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(receiveIdType)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      receive_id: receiveId,
+      msg_type: 'interactive',
+      content: JSON.stringify(card)
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.code) {
+    const error = new Error(data.msg || data.error?.message || 'Could not send Lark message.');
+    error.statusCode = response.ok ? 500 : response.status;
+    error.details = data;
+    throw error;
+  }
+  return { message_id: data.data?.message_id, data };
+}
+
+async function maybeSendInboundAssessmentToLark({ assessment, sourceText }) {
+  const mode = process.env.SCOUT_EMAIL_AUTOMATION_LARK_MODE?.trim().toLowerCase()
+    || process.env.COLLAB_ASSESSOR_LARK_MESSAGE_MODE?.trim().toLowerCase()
+    || 'draft_only';
+
+  if (mode !== 'test' && mode !== 'live') {
+    return { sent: false, mode };
+  }
+
+  const target = getLarkMessageTarget();
+  if (target.mode !== mode) {
+    return { sent: false, mode, skipped: `Target mode mismatch: ${target.mode}` };
+  }
+
+  if (!target.receiveId) {
+    return {
+      sent: false,
+      mode,
+      skipped: mode === 'test'
+        ? 'Missing test receive ID.'
+        : 'Missing live receive ID.'
+    };
+  }
+
+  if (!isAllowedLarkMessageTarget(target.receiveId, target.receiveIdType)) {
+    return { sent: false, mode, skipped: 'Receive ID is not on the allowlist.' };
+  }
+
+  const card = buildScoutAssessmentCard({ ...assessment, source_files: [] }, sourceText);
+  const result = await sendLarkMessageToTarget({
+    receiveId: target.receiveId,
+    receiveIdType: target.receiveIdType,
+    card
+  });
+
+  return { sent: true, mode, receiveIdType: target.receiveIdType, receiveId: target.receiveId, message_id: result.message_id };
 }
 
 function md(content) {

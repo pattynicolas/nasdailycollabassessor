@@ -42,7 +42,8 @@ Expected test behavior
 - Scout assesses the forwarded email
 - Scout saves the proposal to the database
 - Scout returns a `lark_draft`
-- Scout does not send anything to live Nuseir unless you explicitly wire a separate approval/send step
+- Scout can automatically send the same card to the configured test chat when `COLLAB_ASSESSOR_LARK_MESSAGE_MODE=test`
+- Scout does not send anything to live Nuseir unless you switch to `live` and add the live target to the allowlist
 
 Lark send safety for manual messages
 
@@ -62,8 +63,8 @@ Testing the simplified card layout
 4. Put only the test group ID in `COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS`.
 5. Leave the live Nuseir receive ID out of the allowlist.
 6. Restart Scout after changing env vars.
-7. Trigger the outbound assessment flow.
-8. Confirm the new card appears in the test group.
+7. Trigger the inbound email flow by forwarding the email again.
+8. Confirm the new card appears in the test group automatically.
 9. When the layout looks right, switch `COLLAB_ASSESSOR_LARK_MESSAGE_MODE=live`.
 10. Add the live Nuseir receive ID to `COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS`.
-11. Send one more message only after you are ready for Nuseir to see the new layout.
+11. Forward one more email only after you are ready for Nuseir to see the new layout.
