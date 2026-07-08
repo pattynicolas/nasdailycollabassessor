@@ -48,6 +48,22 @@ function formatDateValue(eventDate, timeline) {
   return text;
 }
 
+function formatOriginalSummary({ sourceFiles, hasForwardedText }) {
+  if (sourceFiles.length) {
+    return `${sourceFiles.length} screenshot${sourceFiles.length === 1 ? '' : 's'} stored in Scout.`;
+  }
+
+  if (hasForwardedText) {
+    return 'Forwarded email text stored in Scout.';
+  }
+
+  return 'Original source stored in Scout.';
+}
+
+function originalSourceLink(originalLink) {
+  return originalLink ? `[🔗 CLICK HERE](${originalLink})` : '';
+}
+
 export function buildLarkCardContent(message) {
   const lines = message.split(/\r?\n/);
   const title = lines.shift() || 'Scout Opportunity';
@@ -87,6 +103,7 @@ export function buildScoutAssessmentCard(assessment, fallbackMessage) {
   const proposalId = assessment.proposal_record?.id || assessment.proposal_id || '';
   const sourceFiles = Array.isArray(assessment.source_files) ? assessment.source_files : [];
   const originalLink = proposalUrl(proposalId);
+  const hasForwardedText = Boolean(String(fallbackMessage || '').trim());
 
   return {
     config: {
@@ -100,17 +117,14 @@ export function buildScoutAssessmentCard(assessment, fallbackMessage) {
       }
     },
     elements: [
-      md(`**RECOMMENDATION**\n${scoreMarker(verdict)} ${verdict}\n${assessment.one_line_take || reason}`),
+      md(`**🔍 Recommendation**\n${scoreMarker(verdict)} ${verdict}\n${assessment.one_line_take || reason}`),
       { tag: 'hr' },
-      md(`**SUMMARY**\n${summary}`),
-      md(`**ASK/DELIVERABLES**\n${assessment.ask || assessment.next_step || 'Not stated'}`),
-      md(`**Date:** ${formatDateValue(assessment.event_date, assessment.timeline)}`),
-      md(`**Budget**\n${assessment.budget || 'Not stated'}`),
-      md(`**Location**\n${formatLocation(assessment.location)}`),
-      md(`**Original email**\n${sourceFiles.length ? `${sourceFiles.length} screenshot${sourceFiles.length === 1 ? '' : 's'} stored in Scout.` : 'No screenshot stored, only the original text.'}`),
-      ...(originalLink ? [md(`**View original**\n${originalLink}`)] : []),
-      { tag: 'hr' },
-      md(`**Source text**\n${getMessageBody(fallbackMessage) || 'No original email text provided.'}`)
+      md(`**📄 Summary**\n${summary}`),
+      md(`**❓ Ask/ Deliverables**\n${assessment.ask || assessment.next_step || 'Not stated'}`),
+      md(`**🗓️ Date**\n${formatDateValue(assessment.event_date, assessment.timeline)}`),
+      md(`**💵 Budget**\n${assessment.budget || 'Not stated'}`),
+      md(`**📍Location**\n${formatLocation(assessment.location)}`),
+      md(`**Original source**\n${formatOriginalSummary({ sourceFiles, hasForwardedText })}${originalLink ? `\nWant to view original proposal/email from sender? ${originalSourceLink(originalLink)}` : ''}`)
     ]
   };
 }

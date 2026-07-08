@@ -944,26 +944,34 @@ async function maybeSendInboundAssessmentToLark({ assessment, sourceText }) {
     || 'draft_only';
 
   if (mode !== 'test' && mode !== 'live') {
-    return { sent: false, mode };
+    const result = { sent: false, mode, skipped: 'Lark mode is draft_only or unset.' };
+    console.log('[inbound-email] lark send skipped', result);
+    return result;
   }
 
   const target = getLarkMessageTarget();
   if (target.mode !== mode) {
-    return { sent: false, mode, skipped: `Target mode mismatch: ${target.mode}` };
+    const result = { sent: false, mode, skipped: `Target mode mismatch: ${target.mode}` };
+    console.log('[inbound-email] lark send skipped', result);
+    return result;
   }
 
   if (!target.receiveId) {
-    return {
+    const result = {
       sent: false,
       mode,
       skipped: mode === 'test'
         ? 'Missing test receive ID.'
         : 'Missing live receive ID.'
     };
+    console.log('[inbound-email] lark send skipped', result);
+    return result;
   }
 
   if (!isAllowedLarkMessageTarget(target.receiveId, target.receiveIdType)) {
-    return { sent: false, mode, skipped: 'Receive ID is not on the allowlist.' };
+    const result = { sent: false, mode, skipped: 'Receive ID is not on the allowlist.' };
+    console.log('[inbound-email] lark send skipped', result);
+    return result;
   }
 
   const card = buildScoutAssessmentCard({ ...assessment, source_files: [] }, sourceText);
@@ -972,8 +980,9 @@ async function maybeSendInboundAssessmentToLark({ assessment, sourceText }) {
     receiveIdType: target.receiveIdType,
     card
   });
-
-  return { sent: true, mode, receiveIdType: target.receiveIdType, receiveId: target.receiveId, message_id: result.message_id };
+  const sent = { sent: true, mode, receiveIdType: target.receiveIdType, receiveId: target.receiveId, message_id: result.message_id };
+  console.log('[inbound-email] lark send success', sent);
+  return sent;
 }
 
 function md(content) {
