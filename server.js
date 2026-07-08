@@ -15,7 +15,7 @@ const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } }) : null;
 
-const proposalStatuses = ['Pending Details', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
+const proposalStatuses = ['Pending Details', 'Pending Nuseir', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
 const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
 const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
 const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
