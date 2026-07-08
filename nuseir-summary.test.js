@@ -23,8 +23,8 @@ test('buildNuseirSummary includes only Pending Nuseir proposals', () => {
   ]);
 
   assert.match(summary, /Global Leaders Retreat 2026/);
-  assert.match(summary, /Decide whether to attend\./);
-  assert.match(summary, /High-level network and travel is covered\./);
+  assert.match(summary, /Hey Nuseir! 1 proposal waiting on your thoughts\./);
+  assert.match(summary, /🔴 Urgent \*\*Global Leaders Retreat 2026\*\*/);
   assert.doesNotMatch(summary, /Skip me/);
 });
 

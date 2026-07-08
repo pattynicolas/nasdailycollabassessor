@@ -1705,8 +1705,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           method: 'DELETE',
           headers: { 'X-Scout-Admin-Key': getScoutAdminKey() }
         });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'Could not delete proposal.');
+        const raw = await response.text();
+        let data = {};
+        try { data = raw ? JSON.parse(raw) : {}; } catch {}
+        if (!response.ok) {
+          const detail = data.error || data.message || raw || 'Could not delete proposal.';
+          throw new Error(`Delete failed (${response.status}): ${detail}`);
+        }
         await loadProposals(false);
       } catch (error) {
         alert(error.message || 'Could not delete proposal.');

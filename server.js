@@ -3,6 +3,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import pg from 'pg';
 import { fileURLToPath } from 'node:url';
+import { buildLarkCardContent, buildScoutAssessmentCard } from './cards.js';
+import { deleteProposalById } from './proposal-delete.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -424,6 +426,21 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
   }
 });
 
+app.delete('/api/proposals/:id', requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
+  try {
+    const id = Number(req.params.id);
+    await deleteProposalById({
+      pool,
+      id,
+      afterDelete: syncGoogleSheetSoon
+    });
+    res.json({ deleted: true });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Could not delete proposal.' });
+  }
+});
+
 app.post('/api/proposals/:id/files', requireAdmin, async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Proposal database is not connected.' });
   try {
@@ -693,7 +710,11 @@ app.post('/api/inbound-email', async (req, res) => {
 
     const system = `You are Scout, Patty's opportunity scout for Nuseir Yassin. Assess a forwarded proposal email or WhatsApp message. Return a complete JSON assessment using professional executive English. Rewrite awkward wording, extract requester details, timeline, budget, location, website/social links, and the request itself. Be conservative with Nuseir's time and preserve verified facts unless contradicted.`;
     const assessment = await runScoutAssessment({ system, content });
-    const larkDraft = buildScoutAssessmentCard(assessment, sourceText);
+    const larkDraft = buildScoutAssessmentCard({
+      ...assessment,
+      proposal_record: saved.rows[0],
+      source_files: []
+    }, sourceText);
 
     return res.status(200).json({
       ok: true,
@@ -905,69 +926,6 @@ function timingSafeEqual(a, b) {
   return crypto.timingSafeEqual(aBuffer, bBuffer);
 }
 
-function buildLarkCardContent(message) {
-  const lines = message.split(/\r?\n/);
-  const title = lines.shift() || 'Scout Opportunity';
-  const body = lines.join('\n').trim() || 'No details provided.';
-
-  return {
-    config: {
-      wide_screen_mode: true
-    },
-    header: {
-      template: 'blue',
-      title: {
-        tag: 'plain_text',
-        content: title
-      }
-    },
-    elements: [
-      {
-        tag: 'div',
-        text: {
-          tag: 'lark_md',
-          content: body
-        }
-      }
-    ]
-  };
-}
-
-function buildScoutAssessmentCard(assessment, fallbackMessage) {
-  const title = `${formatOpportunityType(assessment.opportunity_type)}: ${assessment.proposal_name || assessment.brand || 'Opportunity'}`;
-  const verdict = assessment.verdict || 'MAYBE';
-  const headerTemplate = verdict === 'YES' ? 'green' : verdict === 'NO' ? 'red' : 'orange';
-  const summary = assessment.proposal_summary || getMessageBody(fallbackMessage) || 'No proposal summary available.';
-  const reason = assessment.decision_reason || assessment.one_line_take || 'Scout did not provide a reason.';
-
-  return {
-    config: {
-      wide_screen_mode: true
-    },
-    header: {
-      template: headerTemplate,
-      title: {
-        tag: 'plain_text',
-        content: title
-      }
-    },
-    elements: [
-      md(`**RECOMMENDATION**\n${scoreMarker(verdict)} **${verdict}** — ${assessment.one_line_take || reason}`),
-      { tag: 'hr' },
-      md(`**SUMMARY**\n${summary}`),
-      md(`**Requester:** ${assessment.requester_name || 'Not stated'}\n**Requester Context:** ${assessment.requester_context || 'Not verified'}`),
-      md(`**Timeline:** ${assessment.timeline || 'Not stated'}\n**Budget:** ${assessment.budget || 'Not stated'}\n**Website/Social Links:** ${assessment.social_links || 'Not stated'}`),
-      { tag: 'hr' },
-      md(`**OPPORTUNITY TYPE**\n${formatOpportunityType(assessment.opportunity_type)}`),
-      { tag: 'hr' },
-      md(`**ASK**\n${assessment.ask || 'Not stated'}`),
-      md(`**NEXT STEP**\n${assessment.next_step || 'Not stated'}`),
-      { tag: 'hr' },
-      md(`**REASON**\n${reason}`)
-    ]
-  };
-}
-
 function md(content) {
   return {
     tag: 'div',
@@ -976,28 +934,6 @@ function md(content) {
       content
     }
   };
-}
-
-function criterionLine(label, score, reason) {
-  return `**${label}:** ${scoreMarker(score)} **${score || 'MEDIUM'}**${reason ? ` — ${reason}` : ''}`;
-}
-
-function scoreMarker(score = '') {
-  if (['YES', 'STRONG', 'HIGH', 'WORTH IT'].includes(score)) return '🟢';
-  if (['NO', 'WEAK', 'LOW', 'NOT WORTH IT'].includes(score)) return '🔴';
-  return '🟡';
-}
-
-function formatOpportunityType(type) {
-  if (type === 'Collaboration / Content Opportunity') return 'Content Opportunity';
-  if (type === 'Non-Profit / Cause Initiative') return 'Non-Profit Initiative';
-  return type || 'Opportunity';
-}
-
-function getMessageBody(message) {
-  const lines = String(message || '').split(/\r?\n/);
-  lines.shift();
-  return lines.join('\n').trim();
 }
 
 function buildLarkPostContent(message) {

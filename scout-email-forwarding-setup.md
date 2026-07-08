@@ -53,3 +53,17 @@ Lark send safety for manual messages
 - Add only the test chat or test user receive ID to `COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS`
 - Do not include the live group receive ID in that list
 - If the allowlist is empty, Scout refuses to send a Lark message
+
+Testing the simplified card layout
+
+1. Keep `COLLAB_ASSESSOR_LARK_MESSAGE_MODE=test`.
+2. Set `COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID` to a separate group chat ID.
+3. Set `COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID_TYPE=chat_id` unless you are testing a user/email target.
+4. Put only the test group ID in `COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS`.
+5. Leave the live Nuseir receive ID out of the allowlist.
+6. Restart Scout after changing env vars.
+7. Trigger the outbound assessment flow.
+8. Confirm the new card appears in the test group.
+9. When the layout looks right, switch `COLLAB_ASSESSOR_LARK_MESSAGE_MODE=live`.
+10. Add the live Nuseir receive ID to `COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS`.
+11. Send one more message only after you are ready for Nuseir to see the new layout.
