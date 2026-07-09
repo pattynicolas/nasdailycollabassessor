@@ -68,6 +68,9 @@ export function buildNuseirSummary(proposals = [], options = {}) {
   }
 
   const lines = [
+    `Hey Nuseir! @Nuseir Yassqueen ✨`,
+    `click on each item and reply on the thread.`,
+    '',
     `${pending.length} proposal${pending.length === 1 ? '' : 's'} pending your decision. Please reply to each thread if YES or SKIP.`,
     ''
   ];

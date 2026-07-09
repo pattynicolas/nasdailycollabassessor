@@ -1110,7 +1110,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       if (!pending.length && !inDiscussion.length) {
         return `No proposals are currently marked "${pendingNuseirStatus}" or "In Discussion".${footer}`;
       }
-      const lines = [];
+      const lines = ['Hey Nuseir! @Nuseir Yassqueen ✨', 'click on each item and reply on the thread.'];
       const sortedPending = [...pending].sort((a, b) => {
         const urgentDiff = Number(isUrgentProposal(b)) - Number(isUrgentProposal(a));
         if (urgentDiff !== 0) return urgentDiff;
@@ -1141,6 +1141,9 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       if (!text) return '';
       const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
       return blocks.map(block => {
+        if (block.startsWith('Hey Nuseir! @Nuseir Yassqueen ✨') || block.startsWith('click on each item and reply on the thread.')) {
+          return `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`;
+        }
         if (/\bproposal(?:s)? pending your decision\./i.test(block) || /\bin discussion - no action needed\./i.test(block)) {
           return `<p><strong>${escapeHtml(block).replace(/\n/g, '<br>')}</strong></p>`;
         }
