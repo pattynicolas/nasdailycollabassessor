@@ -645,7 +645,7 @@
         <div class="attachment-viewer-title">Pending Nuseir's Decision</div>
         <div class="attachment-viewer-actions">
           <button class="copy-btn" type="button" onclick="copyNuseirSummary()"><i class="ti ti-copy"></i> Copy summary</button>
-          <button class="copy-btn" id="send-test-digest-btn" type="button" onclick="sendTestNuseirDigest()"><i class="ti ti-send"></i> Send test to Lark</button>
+          <button class="copy-btn" id="send-test-digest-btn" type="button" onclick="sendTestNuseirDigest()"><i class="ti ti-send"></i> Send Summary to Lark</button>
           <button class="icon-btn" type="button" title="Close" onclick="closeNuseirSummaryDialog()"><i class="ti ti-x"></i></button>
         </div>
       </div>
@@ -1875,10 +1875,10 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         });
         const data = await response.json().catch(() => ({}));
         if (response.status === 403) clearScoutAdminKey();
-        if (!response.ok) throw new Error(data.error || 'Could not send the test digest.');
+        if (!response.ok) throw new Error(data.error || `Could not send the summary to Lark (HTTP ${response.status}).`);
         alert(`Test digest sent to Lark (${data.proposals || 0} pending proposal${data.proposals === 1 ? '' : 's'}).`);
       } catch (error) {
-        alert(error.message || 'Could not send the test digest.');
+        alert(error.message || 'Could not send the summary to Lark.');
       } finally {
         if (button) {
           button.disabled = false;
