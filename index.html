@@ -540,12 +540,13 @@
         <details class="status-guide">
           <summary><i class="ti ti-info-circle"></i> What each status means</summary>
           <div class="status-guide-grid">
-            <strong>Pending Details</strong><span>We replied and need more information before approving or rejecting.</span>
-            <strong>Pending Nuseir</strong><span>We have enough context and are waiting for Nuseir’s decision or reaction.</span>
-            <strong>Agreed; Pending Contract</strong><span>Nuseir said yes. We are waiting for the agreement to be finalized and signed.</span>
-            <strong>Rejected</strong><span>We declined the opportunity.</span>
-            <strong>Contract Signed</strong><span>The agreement is signed; delivery or the event is still pending.</span>
-            <strong>Delivered</strong><span>The collaboration, appearance, or event is complete.</span>
+            <strong>In Discussion</strong><span>Initial conversation happened; waiting for more details, budget, dates, etc. (Replaces “Pending Details”)</span>
+            <strong>Pending Nuseir</strong><span>Waiting for Nuseir to approve or decline.</span>
+            <strong>Accepted; Awaiting Contract</strong><span>Both sides agreed in principle; waiting for the contract.</span>
+            <strong>Contract Signed</strong><span>Contract fully executed.</span>
+            <strong>Delivered</strong><span>Speaking engagement, collaboration, or event completed.</span>
+            <strong>Declined</strong><span>We decided not to proceed. (Better than “Rejected” since you’re the one saying no.)</span>
+            <strong>Withdrawn</strong><span>Client cancelled or withdrew the opportunity. (Better than “Parked” if they pulled the offer.)</span>
           </div>
         </details>
         <div class="database-toolbar">
@@ -637,6 +638,23 @@
 
   <script>
     const pendingNuseirStatus = 'Pending Nuseir';
+    const statusAliases = {
+      'Pending Details': 'In Discussion',
+      New: 'In Discussion',
+      Reviewing: 'In Discussion',
+      'Needs Info': 'In Discussion',
+      Approved: 'Accepted; Awaiting Contract',
+      'Sent to Nuseir': 'Accepted; Awaiting Contract',
+      'Agreed; Pending Contract': 'Accepted; Awaiting Contract',
+      Rejected: 'Declined',
+      Parked: 'Withdrawn',
+      Completed: 'Delivered'
+    };
+
+    function normalizeProposalStatus(status) {
+      const text = String(status || '').trim();
+      return statusAliases[text] || text || 'In Discussion';
+    }
     const images = [];
     let lastLarkMessage = '';
     let lastAssessment = null;
@@ -1157,12 +1175,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       sourcePreviewUrls = [];
       rows.innerHTML = sortedProposals.map(proposal => {
         const a = proposal.assessment || {};
-        const statusOptions = ['Pending Details', pendingNuseirStatus, 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered']
-          .map(status => `<option${status === proposal.status ? ' selected' : ''}>${status}</option>`).join('');
+        const currentStatus = normalizeProposalStatus(proposal.status);
+        const statusOptions = ['In Discussion', pendingNuseirStatus, 'Accepted; Awaiting Contract', 'Declined', 'Contract Signed', 'Delivered', 'Withdrawn']
+          .map(status => `<option${status === currentStatus ? ' selected' : ''}>${status}</option>`).join('');
         const typeOptions = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other']
           .map(type => `<option${type === a.opportunity_type ? ' selected' : ''}>${type}</option>`).join('');
         const paymentOptions = ['Pending', 'Paid', 'Pro-Bono'].map(value => `<option${value === proposal.payment_status ? ' selected' : ''}>${value}</option>`).join('');
-        const agreed = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(proposal.status);
+        const agreed = ['Accepted; Awaiting Contract', 'Contract Signed', 'Delivered'].includes(currentStatus);
         const deleteLabel = escapeHtml(getProposalDeleteLabel(proposal));
         const sourceBadge = renderMetaBadge(proposal.intake_source || a.intake_source || 'Manual', 'source');
         const confidenceBadge = renderMetaBadge(proposal.intake_confidence || a.confidence || 'Medium', 'confidence');
@@ -1171,7 +1190,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           <div class="record-head">
             <div class="date-card"><span>Engagement date</span><strong>${escapeHtml(proposal.event_date || a.timeline || 'Not stated')}</strong></div>
             <div><div class="proposal-title-row"><div class="proposal-title">${escapeHtml(a.proposal_name || a.brand || 'Untitled opportunity')}</div><div class="proposal-badges">${sourceBadge}${confidenceBadge}${reviewBadge}</div></div><div class="proposal-summary">${escapeHtml(a.proposal_summary || 'No proposal summary available.')}</div><div class="proposal-meta">${escapeHtml(a.budget || 'Budget not stated')} &nbsp;•&nbsp; ${escapeHtml(proposal.location || 'Location not stated')}</div>${renderCompactOriginalPreview(proposal)}</div>
-            <div class="record-field status-wrap"><label>Status</label>${readOnly ? `<div class="tracker-input">${escapeHtml(proposal.status || 'Pending Details')}</div>` : `<select class="tracker-select status-select ${getStatusClass(proposal.status)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select>`}<span class="save-state" id="save-${proposal.id}"></span></div>
+            <div class="record-field status-wrap"><label>Status</label>${readOnly ? `<div class="tracker-input">${escapeHtml(currentStatus)}</div>` : `<select class="tracker-select status-select ${getStatusClass(currentStatus)}" id="status-${proposal.id}" onchange="updateStatusStyle(this); toggleAgreementFields(${proposal.id}); saveProposal(${proposal.id})">${statusOptions}</select>`}<span class="save-state" id="save-${proposal.id}"></span></div>
             ${readOnly ? '' : `<div class="record-actions">
               <button class="icon-btn" type="button" title="Delete proposal" aria-label="Delete ${deleteLabel}" onclick="deleteProposal(${proposal.id})"><i class="ti ti-trash"></i></button>
               <button class="icon-btn" type="button" title="Edit proposal" onclick="toggleRecordEditor(${proposal.id}, this)"><i class="ti ti-pencil"></i></button>
@@ -1343,7 +1362,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function getStatusClass(status) {
-      return 'status-' + String(status || 'Pending Details').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      return 'status-' + String(normalizeProposalStatus(status)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     }
 
     function updateStatusStyle(select) {
@@ -1398,7 +1417,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function toggleAgreementFields(id) {
       const status = document.getElementById(`status-${id}`).value;
-      document.getElementById(`agreement-${id}`).style.display = ['Agreed; Pending Contract', 'Contract Signed', 'Delivered'].includes(status) ? 'block' : 'none';
+      document.getElementById(`agreement-${id}`).style.display = ['Accepted; Awaiting Contract', 'Contract Signed', 'Delivered'].includes(normalizeProposalStatus(status)) ? 'block' : 'none';
     }
 
     function formatProposalDate(value) {

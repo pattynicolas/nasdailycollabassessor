@@ -15,7 +15,7 @@ const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } }) : null;
 
-const proposalStatuses = ['Pending Details', 'Pending Nuseir', 'Agreed; Pending Contract', 'Rejected', 'Contract Signed', 'Delivered'];
+const proposalStatuses = ['In Discussion', 'Pending Nuseir', 'Accepted; Awaiting Contract', 'Declined', 'Contract Signed', 'Delivered', 'Withdrawn'];
 const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
 const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
 const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
@@ -306,7 +306,7 @@ async function initializeDatabase() {
       id BIGSERIAL PRIMARY KEY,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      status TEXT NOT NULL DEFAULT 'Pending Details',
+      status TEXT NOT NULL DEFAULT 'In Discussion',
       notes TEXT NOT NULL DEFAULT '',
       source_text TEXT NOT NULL DEFAULT '',
       assessment JSONB NOT NULL
@@ -318,10 +318,12 @@ async function initializeDatabase() {
     ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'Pending',
     ADD COLUMN IF NOT EXISTS commission_breakdown TEXT NOT NULL DEFAULT ''`);
-  await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'Pending Details'`);
+  await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'In Discussion'`);
   await pool.query(`UPDATE scout_proposals SET status = CASE
-    WHEN status IN ('New', 'Reviewing', 'Needs Info') THEN 'Pending Details'
-    WHEN status IN ('Approved', 'Sent to Nuseir') THEN 'Agreed; Pending Contract'
+    WHEN status IN ('New', 'Reviewing', 'Needs Info', 'Pending Details') THEN 'In Discussion'
+    WHEN status IN ('Approved', 'Sent to Nuseir', 'Agreed; Pending Contract') THEN 'Accepted; Awaiting Contract'
+    WHEN status IN ('Rejected', 'Declined') THEN 'Declined'
+    WHEN status IN ('Parked', 'Withdrawn') THEN 'Withdrawn'
     WHEN status = 'Completed' THEN 'Delivered'
     ELSE status END`);
   await pool.query(`
@@ -505,9 +507,22 @@ app.post('/api/proposals/import', requireAdmin, async (req, res) => {
         skipped += 1;
         continue;
       }
-      const legacyStatusMap = { New: 'Pending Details', Reviewing: 'Pending Details', 'Needs Info': 'Pending Details', Approved: 'Agreed; Pending Contract', 'Sent to Nuseir': 'Agreed; Pending Contract', Completed: 'Delivered' };
+      const legacyStatusMap = {
+        New: 'In Discussion',
+        Reviewing: 'In Discussion',
+        'Needs Info': 'In Discussion',
+        'Pending Details': 'In Discussion',
+        Approved: 'Accepted; Awaiting Contract',
+        'Sent to Nuseir': 'Accepted; Awaiting Contract',
+        'Agreed; Pending Contract': 'Accepted; Awaiting Contract',
+        Rejected: 'Declined',
+        Declined: 'Declined',
+        Parked: 'Withdrawn',
+        Withdrawn: 'Withdrawn',
+        Completed: 'Delivered'
+      };
       const requestedStatus = legacyStatusMap[item?.status] || item?.status;
-      const status = proposalStatuses.includes(requestedStatus) ? requestedStatus : 'Pending Details';
+      const status = proposalStatuses.includes(requestedStatus) ? requestedStatus : 'In Discussion';
       const notes = String(item?.notes || '').slice(0, 10000);
       await pool.query(
         'INSERT INTO scout_proposals (assessment, source_text, status, notes) VALUES ($1::jsonb, $2, $3, $4)',
@@ -701,10 +716,11 @@ app.post('/api/inbound-email', async (req, res) => {
     }) : null;
 
     if (duplicateCandidate && !allowDuplicate) {
-      return res.status(409).json({
-        ok: false,
+      return res.status(200).json({
+        ok: true,
         duplicate: duplicateCandidate,
-        error: 'This looks like the same proposal as an existing Scout record. Review the match, then retry with allow_duplicate=1 if you want to proceed.'
+        skipped: true,
+        warning: 'This looks like the same proposal as an existing Scout record. Scout skipped creating a new record.'
       });
     }
 
