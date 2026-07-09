@@ -928,6 +928,10 @@ function csvCell(value) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function proposalUrl(proposalId) {
+  return proposalId ? `https://nasdailycollabassessor.onrender.com/?view=database&proposal=${encodeURIComponent(proposalId)}` : '';
+}
+
 function timingSafeEqual(a, b) {
   const aBuffer = Buffer.from(a);
   const bBuffer = Buffer.from(b);
