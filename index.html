@@ -1082,8 +1082,14 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return `${window.location.origin}/?view=database&proposal=${encodeURIComponent(id)}`;
     }
 
+    function extractUrlFromMarkdownLink(value) {
+      const text = String(value || '').trim();
+      const match = text.match(/^\*{0,2}\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\*{0,2}$/);
+      return match ? match[2] : text;
+    }
+
     function buildBestProposalLink(proposal) {
-      const larkMessageLink = String(proposal?.lark_message_link || '').trim();
+      const larkMessageLink = extractUrlFromMarkdownLink(proposal?.lark_message_link);
       if (larkMessageLink) return larkMessageLink;
       return buildProposalPermalink(proposal?.id);
     }
