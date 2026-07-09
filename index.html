@@ -1106,7 +1106,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const proposals = Array.from(loadedProposals.values());
       const pending = proposals.filter(proposal => normalizeProposalStatus(proposal.status) === pendingNuseirStatus);
       const inDiscussion = proposals.filter(proposal => normalizeProposalStatus(proposal.status) === 'In Discussion');
-      const footer = `\n\n[View all active proposals here](https://nasdailycollabassessor.onrender.com/?view=database)\nPassword: NasMeansPeople`;
+      const footer = `\n\nPassword: NasMeansPeople\n\n[View all active proposals here](https://nasdailycollabassessor.onrender.com/?view=database)`;
       if (!pending.length && !inDiscussion.length) {
         return `No proposals are currently marked "${pendingNuseirStatus}" or "In Discussion".${footer}`;
       }
@@ -1118,6 +1118,8 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       });
       const sortedInDiscussion = [...inDiscussion].sort(compareProposalDates);
       lines.push(`${sortedPending.length} proposal${sortedPending.length === 1 ? '' : 's'} pending your decision. Please reply to each thread if YES or SKIP.`);
+      lines.push('Password: NasMeansPeople');
+      lines.push('');
       for (const proposal of sortedPending) {
         const assessment = proposal.assessment || {};
         const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;

@@ -62,7 +62,7 @@ function formatProposalTitle(proposal, options = {}) {
 
 export function buildNuseirSummary(proposals = [], options = {}) {
   const pending = proposals.filter(proposal => String(proposal?.status || '').trim() === pendingNuseirStatus);
-  const footer = `\n\n[View all active proposals here](${funnelUrl})\nPassword: ${funnelPassword}`;
+  const footer = `\n\n[View all active proposals here](${funnelUrl})`;
   if (!pending.length) {
     return `No proposals are currently marked "${pendingNuseirStatus}".${footer}`;
   }
@@ -72,6 +72,7 @@ export function buildNuseirSummary(proposals = [], options = {}) {
     `click on each item and reply on the thread.`,
     '',
     `${pending.length} proposal${pending.length === 1 ? '' : 's'} pending your decision. Please reply to each thread if YES or SKIP.`,
+    `Password: ${funnelPassword}`,
     ''
   ];
 
