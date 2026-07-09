@@ -18,7 +18,7 @@ const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, ssl: databa
 const proposalStatuses = ['In Discussion', 'Pending Nuseir', 'Accepted; Awaiting Contract', 'Declined', 'Contract Signed', 'Delivered', 'Withdrawn'];
 const opportunityTypes = ['Collaboration / Content Opportunity', 'Speaking Engagement', 'Partnership Proposal', 'Non-Profit / Cause Initiative', 'Media Opportunity', 'Other'];
 const paymentStatuses = ['Pending', 'Paid', 'Pro-Bono'];
-const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
+const sheetHeaders = ['ID', 'Created', 'Updated', 'Status', 'Proposal', 'Brand', 'Type', 'Recommendation', 'Summary', 'Requester', 'Requester Context', 'Timeline', 'Budget', 'Engagement Date', 'Location', 'Payment Status', 'Patty Commission Breakdown', 'Website/Social Links', 'Lark Message ID', 'Lark Message Link', 'Reach', 'Relevance', 'Potential Business', 'Requester Credibility', 'Time Cost', 'Ask', 'Next Step', 'Reason', 'Notes'];
 
 function parseEnvList(value) {
   return String(value || '')
@@ -223,7 +223,7 @@ async function runScoutAssessment({ system, content, updateProposalId = 0 }) {
       const sourceText = (rawSourceText.includes(additionalMarker) ? rawSourceText.split(additionalMarker).slice(1).join(additionalMarker) : '').slice(0, 50000);
       let saved;
       if (existingProposalId) {
-        const current = await pool.query('SELECT source_text, event_date, location FROM scout_proposals WHERE id = $1', [existingProposalId]);
+        const current = await pool.query('SELECT source_text, event_date, location, lark_message_id, lark_message_link FROM scout_proposals WHERE id = $1', [existingProposalId]);
         if (!current.rowCount) {
           const error = new Error('Proposal not found.');
           error.statusCode = 404;
@@ -236,14 +236,15 @@ async function runScoutAssessment({ system, content, updateProposalId = 0 }) {
         const eventDate = proposedDate && !/not stated|unknown|tbd/i.test(proposedDate) ? proposedDate : prior.event_date;
         const location = proposedLocation && !/not stated|unknown|tbd/i.test(proposedLocation) ? proposedLocation : prior.location;
         saved = await pool.query(
-          `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4, updated_at = NOW()
-           WHERE id = $5 RETURNING id, created_at, status`,
-          [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', existingProposalId]
+          `UPDATE scout_proposals SET assessment = $1::jsonb, source_text = $2, event_date = $3, location = $4,
+           lark_message_id = COALESCE(NULLIF(lark_message_id, ''), $5), lark_message_link = COALESCE(NULLIF(lark_message_link, ''), $6), updated_at = NOW()
+           WHERE id = $7 RETURNING id, created_at, status`,
+          [JSON.stringify(assessment), mergedSource, eventDate || '', location || '', String(prior.lark_message_id || ''), String(prior.lark_message_link || ''), existingProposalId]
         );
       } else {
         saved = await pool.query(
-          'INSERT INTO scout_proposals (assessment, source_text, event_date, location) VALUES ($1::jsonb, $2, $3, $4) RETURNING id, created_at, status',
-          [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || '')]
+          'INSERT INTO scout_proposals (assessment, source_text, event_date, location, lark_message_id, lark_message_link) VALUES ($1::jsonb, $2, $3, $4, $5, $6) RETURNING id, created_at, status',
+          [JSON.stringify(assessment), sourceText, String(assessment.timeline || ''), String(assessment.location || ''), '', '']
         );
       }
       let screenshotIndex = 0;
@@ -274,7 +275,7 @@ async function runScoutAssessment({ system, content, updateProposalId = 0 }) {
 
 function proposalSheetRow(row) {
   const a = row.assessment || {};
-  return [row.id, row.created_at, row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.commission_breakdown, a.social_links, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes].map(value => value ?? '');
+  return [row.id, row.created_at, row.updated_at, row.status, a.proposal_name, a.brand, a.opportunity_type, a.verdict, a.proposal_summary, a.requester_name, a.requester_context, a.timeline, a.budget, row.event_date, row.location, row.payment_status, row.commission_breakdown, a.social_links, row.lark_message_id, row.lark_message_link, a.reach_score, a.relevance_score, a.business_score, a.credibility_score, a.time_cost_score, a.ask, a.next_step, a.decision_reason, row.notes].map(value => value ?? '');
 }
 
 async function syncGoogleSheet() {
@@ -307,6 +308,8 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       status TEXT NOT NULL DEFAULT 'In Discussion',
+      lark_message_id TEXT NOT NULL DEFAULT '',
+      lark_message_link TEXT NOT NULL DEFAULT '',
       notes TEXT NOT NULL DEFAULT '',
       source_text TEXT NOT NULL DEFAULT '',
       assessment JSONB NOT NULL
@@ -316,6 +319,8 @@ async function initializeDatabase() {
   await pool.query(`ALTER TABLE scout_proposals
     ADD COLUMN IF NOT EXISTS event_date TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS lark_message_id TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS lark_message_link TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'Pending',
     ADD COLUMN IF NOT EXISTS commission_breakdown TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE scout_proposals ALTER COLUMN status SET DEFAULT 'In Discussion'`);
@@ -406,6 +411,8 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     const budget = String(req.body?.budget || '').trim();
     const eventDate = String(req.body?.eventDate || '').trim();
     const location = String(req.body?.location || '').trim();
+    const larkMessageId = String(req.body?.larkMessageId || '').trim();
+    const larkMessageLink = String(req.body?.larkMessageLink || '').trim();
     const paymentStatus = String(req.body?.paymentStatus || 'Pending').trim();
     const commissionBreakdown = String(req.body?.commissionBreakdown || '');
     const sourceText = String(req.body?.sourceText || '');
@@ -415,10 +422,11 @@ app.patch('/api/proposals/:id', requireAdmin, async (req, res) => {
     if (!paymentStatuses.includes(paymentStatus)) return res.status(400).json({ error: 'Invalid payment status.' });
     const result = await pool.query(
       `UPDATE scout_proposals SET status = $1, notes = $2, event_date = $3, location = $4,
-       payment_status = $5, commission_breakdown = $6,
-       source_text = $7, assessment = assessment || jsonb_build_object('opportunity_type', $8::text, 'budget', $9::text), updated_at = NOW()
-       WHERE id = $10 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, source_text, assessment`,
-      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), sourceText.slice(0, 50000), type, budget.slice(0, 500), id]
+       payment_status = $5, commission_breakdown = $6, lark_message_id = COALESCE(NULLIF($7, ''), lark_message_id),
+       lark_message_link = COALESCE(NULLIF($8, ''), lark_message_link),
+       source_text = $9, assessment = assessment || jsonb_build_object('opportunity_type', $10::text, 'budget', $11::text), updated_at = NOW()
+       WHERE id = $12 RETURNING id, created_at, updated_at, status, notes, event_date, location, payment_status, commission_breakdown, lark_message_id, lark_message_link, source_text, assessment`,
+      [status, notes.slice(0, 10000), eventDate.slice(0, 250), location.slice(0, 250), paymentStatus, commissionBreakdown.slice(0, 10000), larkMessageId, larkMessageLink, sourceText.slice(0, 50000), type, budget.slice(0, 500), id]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Proposal not found.' });
     syncGoogleSheetSoon();
@@ -917,8 +925,17 @@ app.post('/api/lark/message', async (req, res) => {
         ? buildScoutAssessmentCard(assessment, String(message).trim())
         : buildLarkCardContent(String(message).trim())
     });
+    const link = resolveSentLarkMessageLink(result, target);
+    const proposalId = Number(assessment?.proposal_record?.id || assessment?.proposal_id || 0);
+    if (proposalId) {
+      try {
+        await saveProposalLarkMetadata(proposalId, { messageId: result.message_id, messageLink: link });
+      } catch (error) {
+        console.error('[lark-message] failed to save Lark metadata', error.message);
+      }
+    }
 
-    return res.status(200).json({ ok: true, message_id: result.message_id, data: result.data });
+    return res.status(200).json({ ok: true, message_id: result.message_id, link, data: result.data });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
   }
@@ -946,6 +963,22 @@ function csvCell(value) {
 
 function proposalUrl(proposalId) {
   return proposalId ? `https://nasdailycollabassessor.onrender.com/?view=database&proposal=${encodeURIComponent(proposalId)}` : '';
+}
+
+function resolveLarkMessageLink({ larkMessageLink, larkMessageId, receiveId, receiveIdType } = {}) {
+  const directLink = String(larkMessageLink || '').trim();
+  if (directLink) return directLink;
+
+  const normalizedMessageId = String(larkMessageId || '').trim();
+  const template = process.env.COLLAB_ASSESSOR_LARK_MESSAGE_LINK_TEMPLATE?.trim();
+  if (template && normalizedMessageId) {
+    return template
+      .replace(/\{message_id\}/g, normalizedMessageId)
+      .replace(/\{receive_id\}/g, String(receiveId || '').trim())
+      .replace(/\{receive_id_type\}/g, String(receiveIdType || '').trim());
+  }
+
+  return '';
 }
 
 function timingSafeEqual(a, b) {
@@ -977,6 +1010,37 @@ async function sendLarkMessageToTarget({ receiveId, receiveIdType, card }) {
     throw error;
   }
   return { message_id: data.data?.message_id, data };
+}
+
+async function saveProposalLarkMetadata(proposalId, { messageId = '', messageLink = '' } = {}) {
+  if (!pool) return null;
+  const id = Number(proposalId);
+  if (!Number.isSafeInteger(id) || id < 1) return null;
+  const normalizedMessageId = String(messageId || '').trim();
+  const normalizedMessageLink = String(messageLink || '').trim();
+  if (!normalizedMessageId && !normalizedMessageLink) return null;
+  await databaseReady;
+  const result = await pool.query(
+    `UPDATE scout_proposals
+     SET lark_message_id = COALESCE(NULLIF($1, ''), lark_message_id),
+         lark_message_link = COALESCE(NULLIF($2, ''), lark_message_link),
+         updated_at = NOW()
+     WHERE id = $3
+     RETURNING id, lark_message_id, lark_message_link`,
+    [normalizedMessageId, normalizedMessageLink, id]
+  );
+  return result.rows[0] || null;
+}
+
+function resolveSentLarkMessageLink(sendResult, target = {}) {
+  const directLink = String(sendResult?.data?.data?.url || sendResult?.data?.data?.share_url || sendResult?.data?.data?.message_url || '').trim();
+  if (directLink) return directLink;
+  return resolveLarkMessageLink({
+    larkMessageLink: '',
+    larkMessageId: sendResult?.message_id,
+    receiveId: target.receiveId,
+    receiveIdType: target.receiveIdType
+  });
 }
 
 function normalizeDuplicateText(value) {
@@ -1136,7 +1200,16 @@ async function maybeSendInboundAssessmentToLark({ assessment, sourceText }) {
     receiveIdType: target.receiveIdType,
     card
   });
-  const sent = { sent: true, mode, receiveIdType: target.receiveIdType, receiveId: target.receiveId, message_id: result.message_id };
+  const link = resolveSentLarkMessageLink(result, target);
+  const proposalId = Number(assessment?.proposal_record?.id || assessment?.proposal_id || 0);
+  if (proposalId) {
+    try {
+      await saveProposalLarkMetadata(proposalId, { messageId: result.message_id, messageLink: link });
+    } catch (error) {
+      console.error('[inbound-email] failed to save Lark metadata', error.message);
+    }
+  }
+  const sent = { sent: true, mode, receiveIdType: target.receiveIdType, receiveId: target.receiveId, message_id: result.message_id, link };
   console.log('[inbound-email] lark send success', sent);
   return sent;
 }
