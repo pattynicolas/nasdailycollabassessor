@@ -487,6 +487,23 @@
     .summary-dialog::backdrop { background: rgba(20, 24, 28, .55); }
     .summary-shell { display: grid; grid-template-rows: auto 1fr; max-height: min(760px, calc(100vh - 32px)); }
     .summary-body { padding: 16px; display: grid; gap: 12px; }
+    .summary-preview {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: .5px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-secondary);
+      color: var(--text);
+      max-height: 280px;
+      overflow: auto;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+    .summary-preview p { margin: 0; }
+    .summary-preview a { color: #3366cc; text-decoration: none; }
+    .summary-preview a:hover { text-decoration: underline; }
+    .summary-preview-block { display: grid; gap: 6px; }
     .summary-body textarea { width: 100%; min-height: 360px; font: inherit; color: var(--text); background: var(--bg-secondary); border: .5px solid var(--border); border-radius: var(--radius); padding: 12px; resize: vertical; }
     .summary-hint { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
     @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid, .update-confirm-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
@@ -631,6 +648,7 @@
       </div>
       <div class="summary-body">
         <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong>, plus <strong>In Discussion</strong> items for visibility only. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
+        <div class="summary-preview" id="nuseir-summary-preview" aria-label="Rendered summary preview"></div>
         <textarea id="nuseir-summary-output" spellcheck="false"></textarea>
       </div>
     </div>
@@ -1104,6 +1122,33 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         }
       }
       return `${lines.join('\n').trim()}${footer}`;
+    }
+
+    function renderSummaryPreview(markdown) {
+      const text = String(markdown || '').trim();
+      if (!text) return '';
+      const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+      return blocks.map(block => {
+        if (block.startsWith('Hey Nuseir!')) {
+          return `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`;
+        }
+        if (block.startsWith('Pending Nuseir:') || block.startsWith('In Discussion:')) {
+          return `<p><strong>${escapeHtml(block).replace(/\n/g, '<br>')}</strong></p>`;
+        }
+        const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+        const rendered = lines.map(line => {
+          const pendingLink = line.match(/^\s*•\s+\*\*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\*\*\s*$/);
+          if (pendingLink) {
+            return `<div>• <a href="${escapeHtml(pendingLink[2])}" target="_blank" rel="noopener"><strong>${escapeHtml(pendingLink[1])}</strong></a></div>`;
+          }
+          const plainLink = line.match(/^\s*•\s+\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\s*$/);
+          if (plainLink) {
+            return `<div>• <a href="${escapeHtml(plainLink[2])}" target="_blank" rel="noopener">${escapeHtml(plainLink[1])}</a></div>`;
+          }
+          return `<div>${escapeHtml(line).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</div>`;
+        }).join('');
+        return `<div class="summary-preview-block">${rendered}</div>`;
+      }).join('');
     }
 
     async function copyLarkMessage() {
@@ -1757,13 +1802,17 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
 
     function openNuseirSummaryDialog() {
       const output = document.getElementById('nuseir-summary-output');
-      output.value = buildNuseirSummary();
+      const summary = buildNuseirSummary();
+      output.value = summary;
+      document.getElementById('nuseir-summary-preview').innerHTML = renderSummaryPreview(summary);
       document.getElementById('nuseir-summary-dialog').showModal();
     }
 
     function closeNuseirSummaryDialog() {
       const dialog = document.getElementById('nuseir-summary-dialog');
       if (dialog.open) dialog.close();
+      const preview = document.getElementById('nuseir-summary-preview');
+      if (preview) preview.innerHTML = '';
     }
 
     async function copyNuseirSummary() {
