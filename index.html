@@ -504,6 +504,9 @@
     .summary-preview a { color: #3366cc; text-decoration: none; }
     .summary-preview a:hover { text-decoration: underline; }
     .summary-preview-block { display: grid; gap: 6px; }
+    .summary-raw { display: none; gap: 8px; }
+    .summary-raw.open { display: grid; }
+    .summary-raw-toggle { justify-self: start; }
     .summary-body textarea { width: 100%; min-height: 360px; font: inherit; color: var(--text); background: var(--bg-secondary); border: .5px solid var(--border); border-radius: var(--radius); padding: 12px; resize: vertical; }
     .summary-hint { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
     @media (max-width: 760px) { .record-head, .record-fields, .proposal-detail-grid, .update-confirm-grid { grid-template-columns: 1fr; } .record-details, .record-editor { margin-left: 0; } .agreement-panel { border-left: 0; border-top: 1px solid var(--border); padding: 12px 0 0; } }
@@ -649,7 +652,10 @@
       <div class="summary-body">
         <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong>, plus <strong>In Discussion</strong> items for visibility only. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
         <div class="summary-preview" id="nuseir-summary-preview" aria-label="Rendered summary preview"></div>
-        <textarea id="nuseir-summary-output" spellcheck="false"></textarea>
+        <button class="copy-btn summary-raw-toggle" type="button" onclick="toggleNuseirSummaryRaw()"><i class="ti ti-code"></i> Show raw text</button>
+        <div class="summary-raw" id="nuseir-summary-raw">
+          <textarea id="nuseir-summary-output" spellcheck="false"></textarea>
+        </div>
       </div>
     </div>
   </dialog>
@@ -1145,7 +1151,13 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
           if (plainLink) {
             return `<div>• <a href="${escapeHtml(plainLink[2])}" target="_blank" rel="noopener">${escapeHtml(plainLink[1])}</a></div>`;
           }
-          return `<div>${escapeHtml(line).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</div>`;
+          const escaped = escapeHtml(line);
+          const linked = escaped
+            .replace(/\*\*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\*\*/g, (_match, label, url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><strong>${escapeHtml(label)}</strong></a>`)
+            .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label, url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`)
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>');
+          return `<div>${linked}</div>`;
         }).join('');
         return `<div class="summary-preview-block">${rendered}</div>`;
       }).join('');
@@ -1805,6 +1817,10 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const summary = buildNuseirSummary();
       output.value = summary;
       document.getElementById('nuseir-summary-preview').innerHTML = renderSummaryPreview(summary);
+      const raw = document.getElementById('nuseir-summary-raw');
+      if (raw) raw.classList.remove('open');
+      const toggle = document.querySelector('.summary-raw-toggle');
+      if (toggle) toggle.innerHTML = '<i class="ti ti-code"></i> Show raw text';
       document.getElementById('nuseir-summary-dialog').showModal();
     }
 
@@ -1813,6 +1829,17 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       if (dialog.open) dialog.close();
       const preview = document.getElementById('nuseir-summary-preview');
       if (preview) preview.innerHTML = '';
+      const raw = document.getElementById('nuseir-summary-raw');
+      if (raw) raw.classList.remove('open');
+      const toggle = document.querySelector('.summary-raw-toggle');
+      if (toggle) toggle.innerHTML = '<i class="ti ti-code"></i> Show raw text';
+    }
+
+    function toggleNuseirSummaryRaw() {
+      const raw = document.getElementById('nuseir-summary-raw');
+      const toggle = document.querySelector('.summary-raw-toggle');
+      const open = raw?.classList.toggle('open');
+      if (toggle) toggle.innerHTML = open ? '<i class="ti ti-code"></i> Hide raw text' : '<i class="ti ti-code"></i> Show raw text';
     }
 
     async function copyNuseirSummary() {
