@@ -630,7 +630,7 @@
         </div>
       </div>
       <div class="summary-body">
-        <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong>. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
+        <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong>, plus <strong>In Discussion</strong> items for visibility only. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
         <textarea id="nuseir-summary-output" spellcheck="false"></textarea>
       </div>
     </div>
@@ -1073,25 +1073,35 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
     }
 
     function buildNuseirSummary() {
-      const pending = Array.from(loadedProposals.values()).filter(proposal => String(proposal.status || '').trim() === pendingNuseirStatus);
+      const proposals = Array.from(loadedProposals.values());
+      const pending = proposals.filter(proposal => normalizeProposalStatus(proposal.status) === pendingNuseirStatus);
+      const inDiscussion = proposals.filter(proposal => normalizeProposalStatus(proposal.status) === 'In Discussion');
       const footer = `\n\n[View all active proposals here](https://nasdailycollabassessor.onrender.com/?view=database)\nPassword: NasMeansPeople`;
-      if (!pending.length) {
-        return `Hey Nuseir! No proposals are currently marked "${pendingNuseirStatus}".${footer}`;
+      if (!pending.length && !inDiscussion.length) {
+        return `Hey Nuseir! No proposals are currently marked "${pendingNuseirStatus}" or "In Discussion".${footer}`;
       }
-      const lines = [
-        `Hey Nuseir! ${pending.length} proposal${pending.length === 1 ? '' : 's'} waiting on your thoughts.`,
-        ''
-      ];
+      const lines = [`Hey Nuseir!`, ''];
       const sortedPending = [...pending].sort((a, b) => {
         const urgentDiff = Number(isUrgentProposal(b)) - Number(isUrgentProposal(a));
         if (urgentDiff !== 0) return urgentDiff;
         return compareProposalDates(a, b);
       });
+      const sortedInDiscussion = [...inDiscussion].sort(compareProposalDates);
+      lines.push(`Pending Nuseir: ${sortedPending.length} proposal${sortedPending.length === 1 ? '' : 's'}.`);
       for (const proposal of sortedPending) {
         const assessment = proposal.assessment || {};
         const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
         const prefix = isUrgentProposal(proposal) ? '• 🔴 Urgent ' : '• ';
         lines.push(`${prefix}**[${title}](${buildBestProposalLink(proposal)})**`);
+      }
+      if (sortedInDiscussion.length) {
+        lines.push('');
+        lines.push(`In Discussion: ${sortedInDiscussion.length} proposal${sortedInDiscussion.length === 1 ? '' : 's'} for visibility only.`);
+        for (const proposal of sortedInDiscussion) {
+          const assessment = proposal.assessment || {};
+          const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
+          lines.push(`• **[${title}](${buildBestProposalLink(proposal)})**`);
+        }
       }
       return `${lines.join('\n').trim()}${footer}`;
     }
