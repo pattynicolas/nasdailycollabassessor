@@ -680,10 +680,23 @@ app.post('/api/inbound-email', async (req, res) => {
   try {
     const inboundSecret = process.env.SCOUT_INBOUND_EMAIL_SECRET?.trim();
     const providedSecret = String(req.get('X-Scout-Inbound-Secret') || req.body?.secret || '').trim();
+    console.log('[inbound-email] received', {
+      hasBody: Boolean(req.body),
+      from: String(req.body?.from || '').trim(),
+      subject: String(req.body?.subject || '').trim(),
+      messageId: String(req.body?.messageId || req.body?.message_id || '').trim(),
+      hasHtml: Boolean(req.body?.html),
+      hasText: Boolean(req.body?.text || req.body?.body),
+      attachments: Array.isArray(req.body?.attachments) ? req.body.attachments.length : 0
+    });
     if (!inboundSecret) {
       return res.status(500).json({ error: 'SCOUT_INBOUND_EMAIL_SECRET is not configured in Render.' });
     }
     if (!providedSecret || providedSecret !== inboundSecret) {
+      console.warn('[inbound-email] rejected secret', {
+        provided: Boolean(providedSecret),
+        matched: Boolean(providedSecret && inboundSecret && providedSecret === inboundSecret)
+      });
       return res.status(403).json({ error: 'Invalid inbound email secret.' });
     }
 
@@ -724,6 +737,10 @@ app.post('/api/inbound-email', async (req, res) => {
     }) : null;
 
     if (duplicateCandidate && !allowDuplicate) {
+      console.log('[inbound-email] duplicate detected, skipping new proposal', {
+        duplicateId: duplicateCandidate.id,
+        duplicateTitle: duplicateCandidate?.assessment?.proposal_name || duplicateCandidate?.assessment?.brand || 'Untitled opportunity'
+      });
       return res.status(200).json({
         ok: true,
         duplicate: duplicateCandidate,
@@ -754,6 +771,10 @@ app.post('/api/inbound-email', async (req, res) => {
 
     const system = `You are Scout, Patty's opportunity scout for Nuseir Yassin. Assess a forwarded proposal email or WhatsApp message. Return a complete JSON assessment using professional executive English. Rewrite awkward wording, extract requester details, timeline, budget, location, website/social links, and the request itself. Be conservative with Nuseir's time and preserve verified facts unless contradicted.`;
     const assessment = await runScoutAssessment({ system, content });
+    console.log('[inbound-email] assessment saved', {
+      proposalId: assessment?.proposal_record?.id,
+      proposalTitle: assessment?.proposal_name || assessment?.brand || assessment?.proposal_record?.assessment?.proposal_name || 'Untitled opportunity'
+    });
     const larkDraft = buildScoutAssessmentCard({
       ...assessment,
       source_files: []
@@ -762,6 +783,11 @@ app.post('/api/inbound-email', async (req, res) => {
     const sendResult = await maybeSendInboundAssessmentToLark({
       assessment,
       sourceText
+    });
+    console.log('[inbound-email] finished', {
+      proposalId: assessment?.proposal_record?.id,
+      sentToLark: Boolean(sendResult?.sent),
+      larkMessageId: sendResult?.message_id || sendResult?.link || ''
     });
 
     return res.status(200).json({
