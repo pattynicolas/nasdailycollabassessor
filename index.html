@@ -650,7 +650,7 @@
         </div>
       </div>
       <div class="summary-body">
-        <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong>, plus <strong>In Discussion</strong> items for visibility only. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
+        <div class="summary-hint">Scout will summarize every proposal currently marked <strong>Pending Nuseir</strong> and include <strong>In Discussion</strong> items for visibility only. Pending items need a YES or SKIP reply in each thread. You can paste this into WhatsApp, Slack, email, or notes for a decision review.</div>
         <div class="summary-preview" id="nuseir-summary-preview" aria-label="Rendered summary preview"></div>
         <button class="copy-btn summary-raw-toggle" type="button" onclick="toggleNuseirSummaryRaw()"><i class="ti ti-code"></i> Show raw text</button>
         <div class="summary-raw" id="nuseir-summary-raw">
@@ -1108,16 +1108,16 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       const inDiscussion = proposals.filter(proposal => normalizeProposalStatus(proposal.status) === 'In Discussion');
       const footer = `\n\n[View all active proposals here](https://nasdailycollabassessor.onrender.com/?view=database)\nPassword: NasMeansPeople`;
       if (!pending.length && !inDiscussion.length) {
-        return `Hey Nuseir! No proposals are currently marked "${pendingNuseirStatus}" or "In Discussion".${footer}`;
+        return `No proposals are currently marked "${pendingNuseirStatus}" or "In Discussion".${footer}`;
       }
-      const lines = [`Hey Nuseir!`, ''];
+      const lines = ['Hey Nuseir!', ''];
       const sortedPending = [...pending].sort((a, b) => {
         const urgentDiff = Number(isUrgentProposal(b)) - Number(isUrgentProposal(a));
         if (urgentDiff !== 0) return urgentDiff;
         return compareProposalDates(a, b);
       });
       const sortedInDiscussion = [...inDiscussion].sort(compareProposalDates);
-      lines.push(`Pending Nuseir: ${sortedPending.length} proposal${sortedPending.length === 1 ? '' : 's'}.`);
+      lines.push(`${sortedPending.length} proposal${sortedPending.length === 1 ? '' : 's'} pending your decision. Please reply to each thread if YES or SKIP.`);
       for (const proposal of sortedPending) {
         const assessment = proposal.assessment || {};
         const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
@@ -1126,7 +1126,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       }
       if (sortedInDiscussion.length) {
         lines.push('');
-        lines.push(`In Discussion: ${sortedInDiscussion.length} proposal${sortedInDiscussion.length === 1 ? '' : 's'} for visibility only.`);
+        lines.push(`${sortedInDiscussion.length} proposal${sortedInDiscussion.length === 1 ? '' : 's'} in discussion - no action needed. For visibility only.`);
         for (const proposal of sortedInDiscussion) {
           const assessment = proposal.assessment || {};
           const title = assessment.proposal_name || assessment.brand || `Proposal #${proposal.id}`;
@@ -1144,7 +1144,7 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
         if (block.startsWith('Hey Nuseir!')) {
           return `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`;
         }
-        if (block.startsWith('Pending Nuseir:') || block.startsWith('In Discussion:')) {
+        if (/\bproposal(?:s)? pending your decision\./i.test(block) || /\bin discussion - no action needed\./i.test(block)) {
           return `<p><strong>${escapeHtml(block).replace(/\n/g, '<br>')}</strong></p>`;
         }
         const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
