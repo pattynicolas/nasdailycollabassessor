@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import pg from 'pg';
 import { fileURLToPath } from 'node:url';
 import { buildLarkCardContent, buildScoutAssessmentCard } from './cards.js';
+import { buildNuseirSummary } from './nuseir-summary.js';
 import { deleteProposalById } from './proposal-delete.js';
 
 const app = express();
@@ -964,6 +965,63 @@ app.post('/api/lark/message', async (req, res) => {
     return res.status(200).json({ ok: true, message_id: result.message_id, link, data: result.data });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Could not send Lark message.' });
+  }
+});
+
+app.post('/api/nuseir-digest/test', async (req, res) => {
+  if (!isAuthorizedAdmin(req)) {
+    return res.status(403).json({ error: 'Not authorized. This action is restricted to Patty.' });
+  }
+
+  if (!pool) {
+    return res.status(503).json({ error: 'Proposal database is not connected.' });
+  }
+
+  const target = getLarkMessageTarget();
+  if (target.mode !== 'test' && target.mode !== 'live') {
+    return res.status(403).json({
+      error: 'Lark sending is disabled. Set COLLAB_ASSESSOR_LARK_MESSAGE_MODE=test to send to the test chat, or live only when you are ready for the live target.'
+    });
+  }
+
+  if (!target.receiveId) {
+    return res.status(500).json({
+      error: target.mode === 'test'
+        ? 'Test Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_TEST_RECEIVE_ID_TYPE in Render.'
+        : 'Live Lark recipient is not set. Add COLLAB_ASSESSOR_LARK_NUSEIR_EMAIL in Render, or add COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID plus COLLAB_ASSESSOR_LARK_NUSEIR_RECEIVE_ID_TYPE.'
+    });
+  }
+
+  if (!isAllowedLarkMessageTarget(target.receiveId, target.receiveIdType)) {
+    return res.status(403).json({
+      error: `Lark sending is locked to the test allowlist. Add the ${target.label} receive ID to COLLAB_ASSESSOR_LARK_ALLOWED_RECEIVE_IDS in Render, and leave the live group out of that list.`
+    });
+  }
+
+  try {
+    await databaseReady;
+    const result = await pool.query('SELECT * FROM scout_proposals ORDER BY created_at DESC');
+    const summary = buildNuseirSummary(result.rows, {
+      linkForProposal(proposal) {
+        return proposalUrl(proposal.id);
+      }
+    });
+    const card = buildLarkCardContent(`Pending Nuseir's Decision\n${summary}`);
+    const sendResult = await sendLarkMessageToTarget({
+      receiveId: target.receiveId,
+      receiveIdType: target.receiveIdType,
+      card
+    });
+    const link = resolveSentLarkMessageLink(sendResult, target);
+    return res.status(200).json({
+      ok: true,
+      proposals: result.rowCount,
+      message_id: sendResult.message_id,
+      link,
+      data: sendResult.data
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Could not send the summary to Lark.' });
   }
 });
 
