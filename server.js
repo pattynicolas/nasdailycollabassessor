@@ -1003,7 +1003,7 @@ app.post('/api/nuseir-digest/test', async (req, res) => {
     const result = await pool.query('SELECT * FROM scout_proposals ORDER BY created_at DESC');
     const summary = buildNuseirSummary(result.rows, {
       linkForProposal(proposal) {
-        return proposalUrl(proposal.id);
+        return extractLarkMessageUrl(proposal?.lark_message_link) || proposalUrl(proposal.id);
       }
     });
     const card = buildLarkCardContent(`Pending Nuseir's Decision\n${summary}`);
@@ -1047,6 +1047,13 @@ function csvCell(value) {
 
 function proposalUrl(proposalId) {
   return proposalId ? `https://nasdailycollabassessor.onrender.com/?view=database&proposal=${encodeURIComponent(proposalId)}` : '';
+}
+
+function extractLarkMessageUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const match = text.match(/^\*{0,2}\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\*{0,2}$/);
+  return match ? match[2] : text;
 }
 
 function resolveLarkMessageLink({ larkMessageLink, larkMessageId, receiveId, receiveIdType } = {}) {
