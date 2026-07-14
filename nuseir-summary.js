@@ -1,10 +1,36 @@
+import { readFileSync } from 'node:fs';
+
 export const pendingNuseirStatus = 'Pending Nuseir';
 const funnelUrl = 'https://nasdailycollabassessor.onrender.com/?view=database';
 const funnelPassword = 'NasMeansPeople';
+const pendingNuseirLarkLinks = loadPendingNuseirLarkLinks();
 
 function cleanText(value, fallback = 'Not stated') {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   return text || fallback;
+}
+
+function normalizeProposalTitle(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function loadPendingNuseirLarkLinks() {
+  try {
+    const url = new URL('./pending-nuseir-lark-links.json', import.meta.url);
+    const raw = JSON.parse(readFileSync(url, 'utf8'));
+    if (!raw || typeof raw !== 'object') return {};
+    return Object.entries(raw).reduce((acc, [title, link]) => {
+      const key = normalizeProposalTitle(title);
+      const value = String(link || '').trim();
+      if (key && value) acc[key] = value;
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
 }
 
 function summarizeNeed(proposal) {
@@ -54,7 +80,9 @@ function urgencyRank(proposal, options = {}) {
 function formatProposalTitle(proposal, options = {}) {
   const assessment = proposal?.assessment || {};
   const title = cleanText(assessment.proposal_name || assessment.brand, `Proposal #${proposal.id}`);
-  const link = typeof options.linkForProposal === 'function' ? options.linkForProposal(proposal) : '';
+  const link = typeof options.linkForProposal === 'function'
+    ? options.linkForProposal(proposal)
+    : pendingNuseirLarkLinks[normalizeProposalTitle(title)] || '';
   const prefix = isUrgent(proposal, options) ? '• 🔴 Urgent ' : '• ';
   if (link) return `${prefix}**[${title}](${link})**`;
   return `${prefix}**${title}**`;

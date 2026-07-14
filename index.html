@@ -691,6 +691,7 @@
     let loadedProposals = new Map();
     let updateImages = new Map();
     let pendingProposalUpdate = null;
+    let pendingNuseirLarkLinks = {};
     const pageParams = new URLSearchParams(window.location.search);
     const pageMode = pageParams.get('view') || '';
     const focusedProposalId = Number(pageParams.get('proposal') || 0);
@@ -708,7 +709,8 @@
       originalSubmissionText = '';
     });
 
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
+      await loadPendingNuseirLarkLinks();
       if (pageMode === 'database') {
         document.body.classList.add('database-only');
         loadProposals();
@@ -1088,9 +1090,36 @@ ${r.decision_reason || r.one_line_take || buildFallbackReason(r)}`;
       return match ? match[2] : text;
     }
 
+    function normalizeProposalTitle(value) {
+      return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    }
+
+    async function loadPendingNuseirLarkLinks() {
+      try {
+        const response = await fetch('/pending-nuseir-lark-links.json', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data || typeof data !== 'object') return;
+        pendingNuseirLarkLinks = Object.entries(data).reduce((acc, [title, link]) => {
+          const key = normalizeProposalTitle(title);
+          const value = String(link || '').trim();
+          if (key && value) acc[key] = value;
+          return acc;
+        }, {});
+      } catch (error) {
+        console.warn('Could not load pending Nuseir Lark links', error);
+      }
+    }
+
     function buildBestProposalLink(proposal) {
       const larkMessageLink = extractUrlFromMarkdownLink(proposal?.lark_message_link);
       if (larkMessageLink) return larkMessageLink;
+      const assessment = proposal?.assessment || {};
+      const title = normalizeProposalTitle(assessment.proposal_name || assessment.brand || '');
+      if (title && pendingNuseirLarkLinks[title]) return pendingNuseirLarkLinks[title];
       return buildProposalPermalink(proposal?.id);
     }
 
